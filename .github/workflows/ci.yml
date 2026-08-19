@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*']
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint:
+    name: Lint PHP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: curl, json, openssl, mysqli
+          coverage: none
+
+      - name: php -l on all PHP files
+        run: |
+          find . -name '*.php' -not -path './vendor/*' -print0 \
+            | xargs -0 -n1 php -l
+
+  build:
+    name: Build release zip
+    needs: lint
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package plugin
+        run: |
+          mkdir -p /tmp/build/backupgestion
+          rsync -a --exclude='.git' --exclude='.github' --exclude='tests' \
+            --exclude='docs/*.docx' ./ /tmp/build/backupgestion/
+          cd /tmp/build
+          zip -r "$GITHUB_WORKSPACE/backupgestion-${GITHUB_REF_NAME#v}.zip" backupgestion
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backupgestion-${{ github.ref_name }}
+          path: backupgestion-*.zip

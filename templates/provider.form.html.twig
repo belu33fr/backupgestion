@@ -1,0 +1,95 @@
+{% extends "generic_show_form.html.twig" %}
+{% import "components/form/fields_macros.html.twig" as fields %}
+
+{% block more_fields %}
+
+    {# Nom, entité, sous-entités et commentaire sont des champs CommonDBTM standards
+       déjà rendus par generic_show_form.html.twig. #}
+
+    <input type="hidden" name="provider_type" value="acronis" />
+
+    <div class="mb-3 row">
+        <label class="col-xxl-4 col-form-label">{{ __('Type de provider', 'backupgestion') }}</label>
+        <div class="col-xxl-8">
+            <div class="form-control-plaintext">{{ providerLabel }}</div>
+        </div>
+    </div>
+
+    {{ fields.smallTitle(__('Identifiants API (chiffrés localement, jamais dans Accounts)', 'backupgestion')) }}
+
+    {% for key, def in credentialFields %}
+        <div class="mb-3 row">
+            <label class="col-xxl-4 col-form-label">
+                {{ def.label }}{% if def.required %} *{% endif %}
+            </label>
+            <div class="col-xxl-8">
+                <input type="{{ def.type == 'password' ? 'password' : 'text' }}"
+                       name="cred_{{ key }}"
+                       class="form-control"
+                       autocomplete="off"
+                       placeholder="{{ hasCredentials[key] is defined ? __('Déjà renseigné — laisser vide pour ne pas modifier', 'backupgestion') : (def.placeholder ?? '') }}" />
+            </div>
+        </div>
+    {% endfor %}
+
+    {% if item.fields['id'] %}
+        <div class="col-12 mb-3 d-flex gap-2 flex-wrap align-items-center">
+            <button type="button" id="bg-btn-test" class="btn btn-primary" data-id="{{ item.fields['id'] }}" data-url="{{ webdir }}/front/provider.form.php">
+                <i class="ti ti-plug me-1"></i>{{ __('Tester la connexion', 'backupgestion') }}
+            </button>
+            <span id="bg-test-result"></span>
+        </div>
+        <script>
+        (function() {
+            var btn = document.getElementById('bg-btn-test');
+            if (!btn) return;
+            btn.addEventListener('click', function() {
+                var result = document.getElementById('bg-test-result');
+                var meta = document.querySelector("meta[property='glpi:csrf_token']");
+                var csrf = meta ? meta.content : '';
+                btn.disabled = true;
+                result.innerHTML = "<span class='badge bg-info'>" + {{ __('En cours...', 'backupgestion')|json_encode|raw }} + "</span>";
+                fetch(btn.dataset.url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Glpi-Csrf-Token': csrf, 'X-Requested-With': 'XMLHttpRequest'},
+                    body: new URLSearchParams({test_connection: '1', id: btn.dataset.id})
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    btn.disabled = false;
+                    if (d.success) {
+                        result.innerHTML = "<span class='badge bg-success'>" + {{ __('Connexion réussie', 'backupgestion')|json_encode|raw }} + "</span>";
+                    } else {
+                        result.innerHTML = "<span class='badge bg-danger'>" + (d.message || {{ __('Échec de connexion', 'backupgestion')|json_encode|raw }}) + "</span>";
+                    }
+                })
+                .catch(function() {
+                    btn.disabled = false;
+                    result.innerHTML = "<span class='badge bg-danger'>" + {{ __('Erreur réseau', 'backupgestion')|json_encode|raw }} + "</span>";
+                });
+            });
+        })();
+        </script>
+    {% else %}
+        <div class="alert alert-info mt-2">
+            <i class="ti ti-info-circle me-2"></i>
+            {{ __("Le test de connexion sera disponible après la première sauvegarde de la fiche.", 'backupgestion') }}
+        </div>
+    {% endif %}
+
+    {% if children|length %}
+        {{ fields.smallTitle(__('Sous-tenants rattachés', 'backupgestion')) }}
+        <table class="table table-sm">
+            <thead><tr><th>{{ __('Nom') }}</th><th>{{ __('Entité') }}</th></tr></thead>
+            <tbody>
+            {% for child in children %}
+                <tr>
+                    <td><a href="{{ webdir }}/front/provider.form.php?id={{ child.id }}">{{ child.name }}</a></td>
+                    <td>{{ child.entities_id }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+
+{% endblock more_fields %}
