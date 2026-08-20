@@ -1,0 +1,405 @@
+<?php
+
+/*
+ -------------------------------------------------------------------------
+ accounts plugin for GLPI
+ Copyright (C) 2015-2026 by the accounts Development Team.
+
+ https://github.com/InfotelGLPI/accounts
+ -------------------------------------------------------------------------
+
+ LICENSE
+
+ This file is part of accounts.
+
+ accounts is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 3 of the License, or
+ (at your option) any later version.
+
+ accounts is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with accounts. If not, see <http://www.gnu.org/licenses/>.
+ --------------------------------------------------------------------------
+ */
+
+namespace GlpiPlugin\Accounts;
+
+use CommonDBTM;
+use CommonGLPI;
+use DBConnection;
+use DbUtils;
+use Glpi\Application\View\TemplateRenderer;
+use Html;
+use Migration;
+use Session;
+
+if (!defined('GLPI_ROOT')) {
+    die("Sorry. You can't access directly to this file");
+}
+
+/**
+ * Class Hash
+ */
+class Hash extends CommonDBTM
+{
+    public static $rightname = "plugin_accounts_hash";
+
+    public $dohistory = true;
+
+    /**
+     * @param int $nb
+     *
+     * @return string
+     */
+    public static function getTypeName($nb = 0)
+    {
+
+        return _n('Fingerprint', 'Fingerprints', $nb,'accounts');
+    }
+
+    public static function getIcon()
+    {
+        return "ti ti-fingerprint";
+    }
+
+    /**
+     * @return bool
+     */
+    public static function canCreate(): bool
+    {
+        return Session::haveRight(static::$rightname, UPDATE);
+    }
+
+    /**
+     * @return bool
+     */
+    public static function canView(): bool
+    {
+        return Session::haveRight(static::$rightname, READ);
+    }
+
+    /**
+     * @param CommonGLPI $item
+     * @param int        $withtemplate
+     *
+     * @return array|string
+     */
+    public function getTabNameForItem(CommonGLPI $item, $withtemplate = 0)
+    {
+
+        if (!$withtemplate) {
+            switch ($item->getType()) {
+                case __CLASS__:
+                    $ong    = [];
+
+                    $ong[2] = self::createTabEntry(__s('Linked accounts list', 'accounts'));
+                    if (Session::haveRight(static::$rightname, UPDATE)) {
+                        $ong[3] = self::createTabEntry(__s('Modification of the encryption key for all passwords', 'accounts'));
+                    }
+
+                    return $ong;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * @param CommonGLPI $item
+     * @param int        $tabnum
+     * @param int        $withtemplate
+     *
+     * @return bool
+     */
+    public static function displayTabContentForItem(CommonGLPI $item, $tabnum = 1, $withtemplate = 0)
+    {
+
+        if ($item->getType() == __CLASS__) {
+            $key = AesKey::checkIfAesKeyExists($item->getID());
+            switch ($tabnum) {
+                case 2:
+                    if (!$key) {
+                        self::showSelectAccountsList($item->getID());
+                    } else {
+                        $parm     = ["id" => $item->getID(),
+                            "aeskey" => $key];
+                        $accounts = Report::queryAccountsList($parm);
+                        Report::showAccountsList($parm, $accounts);
+                    }
+                    break;
+                case 3:
+                    self::showHashChangeForm($item->getID());
+                    break;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Provides search options configuration. Do not rely directly
+     * on this, @return array a *not indexed* array of search options
+     *
+     * @since 9.3
+     *
+     * This should be overloaded in Class
+     *
+     * @see CommonDBTM::searchOptions instead.
+     *
+     * @see https://glpi-developer-documentation.rtfd.io/en/master/devapi/search.html
+     **/
+    public function rawSearchOptions()
+    {
+        $tab[] = [
+            'id'   => 'common',
+            'name' => self::getTypeName(2),
+        ];
+
+        $tab[] = [
+            'id'            => '1',
+            'table'         => $this->getTable(),
+            'field'         => 'name',
+            'name'          => __s('Name'),
+            'datatype'      => 'itemlink',
+            'itemlink_type' => Hash::class,
+            'massiveaction' => false,
+        ];
+
+        $tab[] = [
+            'id'            => '2',
+            'table'         => $this->getTable(),
+            'field'         => 'hash',
+            'name'          => _n('Fingerprint', 'Fingerprints', 1,'accounts'),
+            'massiveaction' => false,
+        ];
+
+        $tab[] = [
+            'id'       => '7',
+            'table'    => $this->getTable(),
+            'field'    => 'comment',
+            'name'     => __s('Comments'),
+            'datatype' => 'text',
+        ];
+
+        $tab[] = [
+            'id'       => '11',
+            'table'    => $this->getTable(),
+            'field'    => 'is_recursive',
+            'name'     => __s('Child entities'),
+            'datatype' => 'bool',
+        ];
+
+        $tab[] = [
+            'id'            => '14',
+            'table'         => $this->getTable(),
+            'field'         => 'date_mod',
+            'name'          => __s('Last update'),
+            'massiveaction' => false,
+            'datatype'      => 'datetime',
+        ];
+
+        $tab[] = [
+            'id'       => '80',
+            'table'    => 'glpi_entities',
+            'field'    => 'completename',
+            'name'     => __s('Entity'),
+            'datatype' => 'dropdown',
+        ];
+
+        $tab[] = [
+            'id'       => '86',
+            'table'    => $this->getTable(),
+            'field'    => 'is_recursive',
+            'name'     => __s('Child entities'),
+            'datatype' => 'bool',
+        ];
+
+        return $tab;
+    }
+
+    /**
+     * @param array $options
+     *
+     * @return array
+     */
+    public function defineTabs($options = [])
+    {
+
+        $ong = [];
+        $this->addDefaultFormTab($ong);
+        $this->addStandardTab(__CLASS__, $ong, $options);
+        $this->addStandardTab(AesKey::class, $ong, $options);
+        $this->addStandardTab('Log', $ong, $options);
+
+        return $ong;
+    }
+
+    /**
+     * @param       $ID
+     * @param array $options
+     *
+     * @return bool
+     */
+    public function showForm($ID, $options = [])
+    {
+
+        if (!$this->canView()) {
+            return false;
+        }
+
+        $restrict = getEntitiesRestrictCriteria(
+            "glpi_plugin_accounts_hashes",
+            '',
+            '',
+            $this->maybeRecursive()
+        );
+        $nbhashes = countElementsInTable("glpi_plugin_accounts_hashes", $restrict);
+        $alert = __s('Please do not use special characters like / \ apostrophe ampersand in encryption keys, or you cannot change it after.', 'accounts');
+
+        $this->initForm($ID, $options);
+        TemplateRenderer::getInstance()->display('@accounts/hash.html.twig', [
+            'item' => $this,
+            'nbhashes' => $nbhashes,
+            'alertmsg' => $alert,
+            'params' => $options,
+        ]);
+        return true;
+    }
+
+    /**
+     * Prepare input datas for adding the item
+     *
+     * @param datas $input
+     *
+     * @return false $input
+     */
+    public function prepareInputForAdd($input)
+    {
+
+        if (isset($input['hash']) && empty($input['hash'])) {
+            $message = __s('You must generate the fingerprint for your encryption key', 'accounts');
+            Session::addMessageAfterRedirect($message, false, ERROR);
+            return false;
+        }
+
+        return $input;
+    }
+
+    /**
+     * @param $ID
+     */
+    public static function showSelectAccountsList($ID)
+    {
+
+        $rand = mt_rand();
+        TemplateRenderer::getInstance()->display('@accounts/hash_select_accounts.html.twig', [
+            'hash_id'           => $ID,
+            'rand'              => $rand,
+            'root_accounts_doc' => PLUGIN_ACCOUNTS_WEBDIR,
+        ]);
+
+    }
+
+    /**
+     * @param $hash_id
+     */
+    public static function showHashChangeForm($hash_id)
+    {
+
+        $aesKey      = new AesKey();
+        $current_key = '';
+
+        if ($aesKey->getFromDBByCrit(['plugin_accounts_hashes_id' => $hash_id])
+            && isset($aesKey->fields['name'])) {
+            $current_key = $aesKey->getDecryptedName();
+        }
+
+        TemplateRenderer::getInstance()->display('@accounts/hash_change_key.html.twig', [
+            'hash_id'        => $hash_id,
+            'current_aeskey' => $current_key,
+            'root_accounts_doc' => PLUGIN_ACCOUNTS_WEBDIR,
+        ]);
+    }
+
+    /**
+     * @param $oldaeskey
+     * @param $newaeskey
+     * @param $hash_id
+     */
+    public static function updateHash($oldaeskey, $newaeskey, $hash_id)
+    {
+        global $DB;
+
+        $Hash = new self();
+        $Hash->getFromDB($hash_id);
+
+        $account = new Account();
+        $aeskey  = new AesKey();
+
+        // Salted, slow verifier for the new key (mirror of crypt.js). Replaces the former
+        // fast double SHA-256, which was brute-forceable offline once disclosed to a user.
+        $newhashstore = AccountCrypto::makeVerifier($newaeskey);
+        // uncrypt passwords for update
+
+        $criteria = [
+            'SELECT' => '*',
+            'FROM' => 'glpi_plugin_accounts_accounts',
+            'WHERE' => ['plugin_accounts_hashes_id' => $hash_id],
+        ];
+
+        $iterator = $DB->request($criteria);
+
+        if (count($iterator) > 0) {
+            foreach ($iterator as $data) {
+                $oldpassword = AccountCrypto::decrypt($data['encrypted_password'], $oldaeskey);
+                $newpassword = addslashes(AccountCrypto::encrypt($oldpassword, $newaeskey));
+                $update = [
+                    'id'                 => $data["id"],
+                    'encrypted_password' => $newpassword,
+                ];
+                // Re-encrypt TOTP secret if present
+                if (!empty($data['encrypted_totp_secret'])) {
+                    $oldtotp = AccountCrypto::decrypt($data['encrypted_totp_secret'], $oldaeskey);
+                    $update['encrypted_totp_secret'] = addslashes(AccountCrypto::encrypt($oldtotp, $newaeskey));
+                }
+                $account->update($update);
+            }
+        }
+        $Hash->update(['id' => $hash_id, 'hash' => $newhashstore]);
+
+        if ($aeskey->getFromDBByCrit(['plugin_accounts_hashes_id'  => $hash_id]) && isset($aeskey->fields["name"])) {
+            $values["id"]   = $aeskey->fields["id"];
+            $values["name"] = $newaeskey;
+            $aeskey->update($values);
+        }
+    }
+
+    public static function install(Migration $migration)
+    {
+        global $DB;
+
+        $default_charset   = DBConnection::getDefaultCharset();
+        $default_collation = DBConnection::getDefaultCollation();
+        $default_key_sign  = DBConnection::getDefaultPrimaryKeySignOption();
+        $table  = self::getTable();
+
+        if (!$DB->tableExists($table)) {
+            $query = "CREATE TABLE `$table` (
+                        `id` int {$default_key_sign} NOT NULL auto_increment,
+                        `name` varchar(255) collate utf8mb4_unicode_ci default NULL,
+                        `entities_id` int unsigned NOT NULL default '0',
+                        `is_recursive` tinyint NOT NULL default '0',
+                        `hash` varchar(255) collate utf8mb4_unicode_ci default NULL,
+                        `comment` text collate utf8mb4_unicode_ci,
+                        `date_mod` timestamp NULL DEFAULT NULL,
+                        PRIMARY KEY  (`id`),
+                        KEY `entities_id` (`entities_id`)
+               ) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation} ROW_FORMAT=DYNAMIC;";
+
+            $DB->doQuery($query);
+        }
+    }
+}

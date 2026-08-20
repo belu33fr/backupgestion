@@ -1,0 +1,936 @@
+<?php
+
+/*
+ -------------------------------------------------------------------------
+ accounts plugin for GLPI
+ Copyright (C) 2015-2026 by the accounts Development Team.
+
+ https://github.com/InfotelGLPI/accounts
+ -------------------------------------------------------------------------
+
+ LICENSE
+
+ This file is part of accounts.
+
+ accounts is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 3 of the License, or
+ (at your option) any later version.
+
+ accounts is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with accounts. If not, see <http://www.gnu.org/licenses/>.
+ --------------------------------------------------------------------------
+ */
+
+use Glpi\Search\SearchOption;
+use GlpiPlugin\Accounts\Account;
+use GlpiPlugin\Accounts\Account_Item;
+use GlpiPlugin\Accounts\AccountInjection;
+use GlpiPlugin\Accounts\AccountState;
+use GlpiPlugin\Accounts\AccountType;
+use GlpiPlugin\Accounts\Config;
+use GlpiPlugin\Accounts\AesKey;
+use GlpiPlugin\Accounts\Hash;
+use GlpiPlugin\Accounts\NotificationState;
+use GlpiPlugin\Accounts\Profile;
+
+/**
+ * @return bool
+ */
+function plugin_accounts_install()
+{
+    global $DB;
+
+    $install   = false;
+    $update78  = false;
+    $update171 = false;
+    $update85 = false;
+
+    Profile::initProfile();
+
+    if (!$DB->tableExists("glpi_plugin_compte")
+        && !$DB->tableExists("glpi_plugin_comptes")
+        && !$DB->tableExists("glpi_comptes")
+        && !$DB->tableExists("glpi_plugin_accounts_accounts")) {
+        $install = true;
+
+        $migration = new Migration(PLUGIN_ACCOUNTS_VERSION);
+
+        Account::install($migration);
+        AccountType::install($migration);
+        AccountState::install($migration);
+        Hash::install($migration);
+        AesKey::install($migration);
+        Account_Item::install($migration);
+        Config::install($migration);
+        NotificationState::install($migration);
+
+        $migration->executeMigration();
+
+    } elseif ($DB->tableExists("glpi_comptes")
+               && !$DB->fieldExists("glpi_comptes", "notes")) {
+        $update78 = true;
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.1.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.3.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.5.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.5.1.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.5.3.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.6.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.7.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.7.1.sql");
+        $_SESSION['plugin_acounts_upgrading'] = 1;
+    } elseif ($DB->tableExists("glpi_plugin_comptes")
+               && !$DB->fieldExists("glpi_plugin_comptes", "all_users")) {
+        $update78 = true;
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.3.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.5.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.5.1.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.5.3.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.6.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.7.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.7.1.sql");
+        $_SESSION['plugin_acounts_upgrading'] = 1;
+    } elseif ($DB->tableExists("glpi_plugin_compte_profiles")
+               && !$DB->fieldExists("glpi_plugin_compte_profiles", "my_groups")) {
+        $update78 = true;
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.5.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.5.1.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.5.3.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.6.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.7.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.7.1.sql");
+        $_SESSION['plugin_acounts_upgrading'] = 1;
+    } elseif ($DB->tableExists("glpi_plugin_compte_profiles")
+               && $DB->fieldExists("glpi_plugin_compte_profiles", "interface")) {
+        $update78 = true;
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.5.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.5.1.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.5.3.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.6.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.7.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.7.1.sql");
+        $_SESSION['plugin_acounts_upgrading'] = 1;
+    } elseif ($DB->tableExists("glpi_plugin_compte")
+               && !$DB->fieldExists("glpi_plugin_compte", "date_mod")) {
+        $update78 = true;
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.5.1.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.5.3.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.6.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.7.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.7.1.sql");
+    } elseif ($DB->tableExists("glpi_plugin_compte")
+               && !$DB->tableExists("glpi_plugin_compte_aeskey")) {
+        $update78 = true;
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.5.3.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.6.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.7.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.7.1.sql");
+    } elseif ($DB->tableExists("glpi_plugin_compte")
+               && !$DB->tableExists("glpi_plugin_accounts_accounts")) {
+        $update78 = true;
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.6.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.7.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.7.1.sql");
+    } elseif ($DB->tableExists("glpi_plugin_accounts_accounts")
+               && !$DB->fieldExists("glpi_plugin_accounts_accounts", "locations_id")) {
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.7.0.sql");
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.7.1.sql");
+    } elseif ($DB->tableExists("glpi_plugin_accounts_hashes")
+               && !$DB->fieldExists("glpi_plugin_accounts_hashes", "entities_id")) {
+        $update171 = true;
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.7.1.sql");
+    }
+
+    //from 1.6 version
+    if ($DB->tableExists("glpi_plugin_accounts_accounts")
+        && !$DB->fieldExists("glpi_plugin_accounts_accounts", "users_id_tech")) {
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.8.0.sql");
+    }
+
+    //from 1.9 version
+    if ($DB->tableExists("glpi_plugin_accounts_accounttypes")
+        && !$DB->fieldExists("glpi_plugin_accounts_accounttypes", "is_recursive")) {
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-1.9.0.sql");
+        $update85 = true;
+    }
+
+    if ($install == false) {
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-3.1.0.sql");
+
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-3.1.3.sql");
+
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-3.1.4.sql");
+
+        $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-3.1.6.sql");
+        //DisplayPreferences Migration
+        $classes = ['PluginAccountsAccount' => Account::class];
+
+        foreach ($classes as $old => $new) {
+            $displayusers = $DB->request([
+                'SELECT' => [
+                    'users_id'
+                ],
+                'DISTINCT' => true,
+                'FROM' => 'glpi_displaypreferences',
+                'WHERE' => [
+                    'itemtype' => $old,
+                ],
+            ]);
+
+            if (count($displayusers) > 0) {
+                foreach ($displayusers as $displayuser) {
+                    $iterator = $DB->request([
+                        'SELECT' => [
+                            'num',
+                            'id'
+                        ],
+                        'FROM' => 'glpi_displaypreferences',
+                        'WHERE' => [
+                            'itemtype' => $old,
+                            'users_id' => $displayuser['users_id'],
+                            'interface' => 'central'
+                        ],
+                    ]);
+
+                    if (count($iterator) > 0) {
+                        foreach ($iterator as $data) {
+                            $iterator2 = $DB->request([
+                                'SELECT' => [
+                                    'id'
+                                ],
+                                'FROM' => 'glpi_displaypreferences',
+                                'WHERE' => [
+                                    'itemtype' => $new,
+                                    'users_id' => $displayuser['users_id'],
+                                    'num' => $data['num'],
+                                    'interface' => 'central'
+                                ],
+                            ]);
+                            if (count($iterator2) > 0) {
+                                foreach ($iterator2 as $dataid) {
+                                    $query = $DB->buildDelete(
+                                        'glpi_displaypreferences',
+                                        [
+                                            'id' => $dataid['id'],
+                                        ]
+                                    );
+                                    $DB->doQuery($query);
+                                }
+                            } else {
+                                $query = $DB->buildUpdate(
+                                    'glpi_displaypreferences',
+                                    [
+                                        'itemtype' => $new,
+                                    ],
+                                    [
+                                        'id' => $data['id'],
+                                    ]
+                                );
+                                $DB->doQuery($query);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($update78) {
+            //Do One time on 0.78
+            $iterator = $DB->request([
+                'SELECT' => [
+                    'id',
+                ],
+                'FROM' => 'glpi_plugin_accounts_profiles',
+            ]);
+            if (count($iterator) > 0) {
+                foreach ($iterator as $data) {
+                    $query = "UPDATE `glpi_plugin_accounts_profiles`
+                     SET `profiles_id` = '" . $data["id"] . "'
+                              WHERE `id` = '" . $data["id"] . "';";
+                    $DB->doQuery($query);
+                }
+            }
+
+            $query = "ALTER TABLE `glpi_plugin_accounts_profiles`
+               DROP `name` ;";
+            $DB->doQuery($query);
+        }
+
+        if ($update171) {
+            $query = "UPDATE `glpi_plugin_accounts_hashes`
+               SET `is_recursive` = '1'
+               WHERE `id` = '1';";
+            $DB->doQuery($query);
+
+            $query = "UPDATE `glpi_plugin_accounts_aeskeys`
+               SET `plugin_accounts_hashes_id` = '1'
+               WHERE `id` = '1';";
+            $DB->doQuery($query);
+        }
+        if ($update85) {
+            $notepad_tables = ['glpi_plugin_accounts_accounts'];
+            $dbu = new DbUtils();
+
+            foreach ($notepad_tables as $t) {
+                // Migrate data
+                $iterator = $DB->request([
+                    'SELECT' => [
+                        'notepad',
+                        'id',
+                    ],
+                    'FROM' => $t,
+                    'WHERE' => [
+                        'NOT' => ['notepad' => null],
+                        'notepad' => ['<>', ''],
+                    ],
+                ]);
+                if (count($iterator) > 0) {
+                    foreach ($iterator as $data) {
+                        $iq = "INSERT INTO `glpi_notepads`
+                          (`itemtype`, `items_id`, `content`, `date`, `date_mod`)
+                   VALUES ('" . $dbu->getItemTypeForTable($t) . "', '" . $data['id'] . "',
+                           '" . addslashes($data['notepad']) . "', NOW(), NOW())";
+                        $DB->doQuery($iq, "0.85 migrate notepad data");
+                    }
+                }
+                $query = "ALTER TABLE `glpi_plugin_accounts_accounts` DROP COLUMN `notepad`;";
+                $DB->doQuery($query);
+            }
+        }
+
+        //from 3.1.8 version
+        if ($DB->tableExists("glpi_plugin_accounts_accounts")
+            && !$DB->fieldExists("glpi_plugin_accounts_accounts", "plugin_accounts_hashes_id")) {
+            $DB->runFile(PLUGIN_ACCOUNTS_DIR . "/install/sql/update-3.2.0.sql");
+        }
+//    include_once(PLUGIN_ACCOUNTS_DIR . "/install/update_320_migrateMultiHashEntities.php");
+//    update_320_migrateMultiHashEntities();
+
+        // from 3.2.0: expand encrypted_password to TEXT (was VARCHAR(255), truncated long ciphertexts)
+        if ($DB->tableExists('glpi_plugin_accounts_accounts')
+            && $DB->fieldExists('glpi_plugin_accounts_accounts', 'encrypted_password')) {
+            $field_info = $DB->request([
+                'SELECT' => ['CHARACTER_MAXIMUM_LENGTH'],
+                'FROM' => 'information_schema.COLUMNS',
+                'WHERE' => [
+                    'TABLE_SCHEMA' => $DB->dbdefault,
+                    'TABLE_NAME' => 'glpi_plugin_accounts_accounts',
+                    'COLUMN_NAME' => 'encrypted_password',
+                ],
+            ])->current();
+
+            // Only migrate if still VARCHAR (CHARACTER_MAXIMUM_LENGTH is NULL for TEXT types)
+            if ($field_info && $field_info['CHARACTER_MAXIMUM_LENGTH'] !== null) {
+                $DB->runFile(PLUGIN_ACCOUNTS_DIR . '/install/sql/update-3.2.1.sql');
+            }
+
+            // NEW: migrate glpi_logs itemtype references
+            $log_classes = [
+                'PluginAccountsAccount' => Account::class,
+                'PluginAccountsHash' => Hash::class,
+                'PluginAccountsAccountType' => AccountType::class,
+                'PluginAccountsAesKey' => AesKey::class,
+            ];
+            foreach ($log_classes as $old_itemtype => $new_itemtype) {
+                if (countElementsInTable('glpi_logs', ['itemtype' => $old_itemtype]) > 0) {
+                    $DB->update('glpi_logs', ['itemtype' => $new_itemtype], ['itemtype' => $old_itemtype]);
+                }
+            }
+            if ($DB->fieldExists('glpi_logs', 'linked_action_itemtype')) {
+                $DB->update(
+                    'glpi_logs',
+                    ['linked_action_itemtype' => Account::class],
+                    ['linked_action_itemtype' => 'PluginAccountsAccount']
+                );
+            }
+        }
+
+        // from 3.2.2: add encrypted TOTP secret field
+        if ($DB->tableExists('glpi_plugin_accounts_accounts')
+            && !$DB->fieldExists('glpi_plugin_accounts_accounts', 'encrypted_totp_secret')) {
+            $DB->runFile(PLUGIN_ACCOUNTS_DIR . '/install/sql/update-3.2.2.sql');
+        }
+
+        // from 3.2.2: encrypt the master AES key at rest (aeskeys.name) with GLPIKey.
+        // The column is widened to TEXT (ciphertext exceeds VARCHAR(255)) and every
+        // plaintext value is encrypted in place. Idempotent: already-encrypted rows
+        // decrypt to a non-empty value and are skipped.
+        if ($DB->tableExists('glpi_plugin_accounts_aeskeys')
+            && $DB->fieldExists('glpi_plugin_accounts_aeskeys', 'name')) {
+            $field_info = $DB->request([
+                'SELECT' => ['CHARACTER_MAXIMUM_LENGTH'],
+                'FROM' => 'information_schema.COLUMNS',
+                'WHERE' => [
+                    'TABLE_SCHEMA' => $DB->dbdefault,
+                    'TABLE_NAME' => 'glpi_plugin_accounts_aeskeys',
+                    'COLUMN_NAME' => 'name',
+                ],
+            ])->current();
+
+            // Only widen if still VARCHAR (CHARACTER_MAXIMUM_LENGTH is NULL for TEXT types)
+            if ($field_info && $field_info['CHARACTER_MAXIMUM_LENGTH'] !== null) {
+                $DB->doQuery(
+                    "ALTER TABLE `glpi_plugin_accounts_aeskeys`
+                     MODIFY `name` TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL"
+                );
+
+                // Encrypt every existing plaintext key in place
+                $glpikey = new \GLPIKey();
+                $rows = $DB->request([
+                    'SELECT' => ['id', 'name'],
+                    'FROM' => 'glpi_plugin_accounts_aeskeys',
+                ]);
+                foreach ($rows as $row) {
+                    $stored = (string) ($row['name'] ?? '');
+                    if ($stored === '') {
+                        continue;
+                    }
+                    // Raw update to bypass the object layer and avoid double encryption
+                    $DB->update(
+                        'glpi_plugin_accounts_aeskeys',
+                        ['name' => $glpikey->encrypt($stored)],
+                        ['id' => $row['id']]
+                    );
+                }
+            }
+        }
+    }
+
+    CronTask::Register(Account::class, 'AccountsAlert', DAY_TIMESTAMP);
+
+    Profile::createFirstAccess($_SESSION['glpiactiveprofile']['id']);
+
+    return true;
+}
+
+
+/**
+ * @return bool
+ */
+function plugin_accounts_uninstall()
+{
+    global $DB;
+
+    //Delete rights associated with the plugin
+    $profileRight = new ProfileRight();
+    foreach (Profile::getAllRights() as $right) {
+        $profileRight->deleteByCriteria(['name' => $right['field']]);
+    }
+
+    $tables = ["glpi_plugin_accounts_accounts",
+        "glpi_plugin_accounts_accounts_items",
+        "glpi_plugin_accounts_accounttypes",
+        "glpi_plugin_accounts_accountstates",
+        "glpi_plugin_accounts_configs",
+        "glpi_plugin_accounts_hashs",
+        "glpi_plugin_accounts_hashes",
+        "glpi_plugin_accounts_aeskeys",
+        "glpi_plugin_accounts_notificationstates"];
+
+    foreach ($tables as $table) {
+        $DB->dropTable($table, true);
+    }
+
+    //old versions
+    $tables = ["glpi_plugin_comptes",
+        "glpi_plugin_compte_device",
+        "glpi_dropdown_plugin_compte_type",
+        "glpi_dropdown_plugin_compte_status",
+        "glpi_plugin_compte_profiles",
+        "glpi_plugin_compte_config",
+        "glpi_plugin_compte_default",
+        "glpi_plugin_compte_mailing",
+        "glpi_plugin_compte",
+        "glpi_plugin_compte_hash",
+        "glpi_plugin_compte_aeskey",
+        "glpi_plugin_accounts_profiles"];
+
+    foreach ($tables as $table) {
+        $DB->dropTable($table, true);
+    }
+
+    $notif          = new Notification();
+    $notif_template = new Notification_NotificationTemplate();
+
+    $options = ['itemtype' => Account::class];
+    foreach ($DB->request([
+        'FROM' => 'glpi_notifications',
+        'WHERE' => $options]) as $data) {
+        $notif->delete($data);
+    }
+
+    //templates
+    $template    = new NotificationTemplate();
+    $translation = new NotificationTemplateTranslation();
+    $options     = ['itemtype' => Account::class];
+    foreach ($DB->request([
+        'FROM' => 'glpi_notificationtemplates',
+        'WHERE' => $options]) as $data) {
+        $options_template = [
+            'notificationtemplates_id' => $data['id'],
+        ];
+
+        foreach ($DB->request([
+            'FROM' => 'glpi_notificationtemplatetranslations',
+            'WHERE' => $options_template]) as $data_template) {
+            $translation->delete($data_template);
+        }
+        $template->delete($data);
+
+        foreach ($DB->request([
+            'FROM' => 'glpi_notifications_notificationtemplates',
+            'WHERE' => $options_template]) as $data_template) {
+            $notif_template->delete($data_template);
+        }
+    }
+
+    $tables_glpi = ["glpi_displaypreferences",
+        "glpi_documents_items",
+        "glpi_savedsearches",
+        "glpi_notepads",
+        "glpi_alerts",
+        "glpi_links_itemtypes",
+        "glpi_items_tickets",
+        "glpi_dropdowntranslations",
+        "glpi_impactitems"];
+
+    foreach ($tables_glpi as $table_glpi) {
+        $DB->delete($table_glpi, ['itemtype' => Account::class]);
+    }
+
+    $DB->delete('glpi_impactrelations', [
+        'OR' => [
+            [
+                'itemtype_source' => [Account::class],
+            ],
+            [
+                'itemtype_impacted' => [Account::class],
+            ],
+        ],
+    ]);
+
+    if (class_exists('PluginDatainjectionModel')) {
+        PluginDatainjectionModel::clean(['itemtype' => Account::class]);
+    }
+
+    Profile::removeRightsFromSession();
+
+    Account::removeRightsFromSession();
+
+    CronTask::unregister("Accounts");
+
+    return true;
+}
+
+function plugin_accounts_postinit()
+{
+    global $PLUGIN_HOOKS;
+
+    $PLUGIN_HOOKS['item_purge']['accounts'] = [];
+
+    foreach (Account::getTypes(true) as $type) {
+        $PLUGIN_HOOKS['item_purge']['accounts'][$type]
+           = [Account_Item::class, 'cleanForItem'];
+
+        CommonGLPI::registerStandardTab($type, Account_Item::class);
+    }
+}
+
+/**
+ * @param $types
+ *
+ * @return mixed
+ */
+function plugin_accounts_AssignToTicket($types)
+{
+    if (Session::haveRight("plugin_accounts_open_ticket", "1")) {
+        $types[Account::class] = Account::getTypeName(2);
+    }
+
+    return $types;
+}
+
+// Define dropdown relations
+/**
+ * @return array
+ */
+function plugin_accounts_getDatabaseRelations()
+{
+    if (Plugin::isPluginActive("accounts")) {
+        return [
+            "glpi_plugin_accounts_accounttypes"  => [
+                "glpi_plugin_accounts_accounts" => "plugin_accounts_accounttypes_id",
+            ],
+            //           "glpi_plugin_accounts_accountstates" => [
+            //              "glpi_plugin_accounts_accounts"      => "plugin_accounts_accountstates_id",
+            //              "glpi_plugin_accounts_notificationstates" => "plugin_accounts_accountstates_id"
+            //           ],
+            "glpi_plugin_accounts_accounts"      => [
+                "glpi_plugin_accounts_accounts_items" => "plugin_accounts_accounts_id",
+            ],
+            "glpi_entities"                      => [
+                "glpi_plugin_accounts_accounts"     => "entities_id",
+                "glpi_plugin_accounts_accounttypes" => "entities_id",
+            ],
+            "glpi_users"                         => [
+                "glpi_plugin_accounts_accounts" => "users_id",
+                "glpi_plugin_accounts_accounts" => "users_id_tech",
+            ],
+            "glpi_groups"                        => [
+                "glpi_plugin_accounts_accounts" => "groups_id",
+                "glpi_plugin_accounts_accounts" => "groups_id_tech",
+            ],
+            "glpi_locations"                     => [
+                "glpi_plugin_accounts_accounts" => "locations_id",
+            ],
+        ];
+    } else {
+        return [];
+    }
+}
+
+// Define Dropdown tables to be manage in GLPI :
+/**
+ * @return array
+ */
+function plugin_accounts_getDropdown()
+{
+    if (Plugin::isPluginActive("accounts")) {
+        return [
+            AccountType::class  => AccountType::getTypeName(2),
+            AccountState::class => AccountState::getTypeName(2),
+        ];
+    } else {
+        return [];
+    }
+}
+
+/**
+ * @param $itemtype
+ *
+ * @return array
+ */
+function plugin_accounts_getAddSearchOptions($itemtype)
+{
+    $sopt = [];
+
+    if (in_array($itemtype, Account::getTypes(true))) {
+        if (Session::haveRight("plugin_accounts", READ)) {
+            $sopt[1900]['table']         = 'glpi_plugin_accounts_accounts';
+            $sopt[1900]['field']         = 'name';
+            $sopt[1900]['name']          = Account::getTypeName(2) . " - " . __s('Name');
+            $sopt[1900]['forcegroupby']  = true;
+            $sopt[1900]['datatype']      = 'itemlink';
+            $sopt[1900]['massiveaction'] = false;
+            $sopt[1900]['itemlink_type'] = Account::class;
+            if ($itemtype != 'User') {
+                $sopt[1900]['joinparams'] = ['beforejoin' => ['table'      => 'glpi_plugin_accounts_accounts_items',
+                    'joinparams' => ['jointype' => 'itemtype_item']]];
+            }
+            $sopt[1901]['table']         = 'glpi_plugin_accounts_accounttypes';
+            $sopt[1901]['field']         = 'name';
+            $sopt[1901]['name']          = Account::getTypeName(2) . " - " . __s('Type');
+            $sopt[1901]['forcegroupby']  = true;
+            $sopt[1901]['joinparams']    = ['beforejoin' => [['table'      => 'glpi_plugin_accounts_accounts',
+                'joinparams' => $sopt[1900]['joinparams']]]];
+            $sopt[1901]['datatype']      = 'dropdown';
+            $sopt[1901]['massiveaction'] = false;
+        }
+    }
+    return $sopt;
+}
+
+/**
+ * @param $type
+ * @param $ref_table
+ * @param $new_table
+ * @param $linkfield
+ * @param $already_link_tables
+ *
+ * @return string
+ */
+
+//function plugin_accounts_addLeftJoin($type, $ref_table, $new_table, $linkfield) {
+//// Example of standard LEFT JOIN  clause but use it ONLY for specific LEFT JOIN
+//// No need of the function if you do not have specific cases
+//    switch ($new_table) {
+//        case "glpi_users": // From items
+//            $out['LEFT JOIN'] = [
+//                'glpi_plugin_accounts_accounts' => [
+//                    'ON' => [
+//                        'glpi_plugin_accounts_accounts'   => 'users_id',
+//                        'glpi_users'                  => 'id'
+//                    ],
+//                ],
+//            ];
+//            return $out;
+//    }
+//    return "";
+//}
+
+/**
+ * @param $type
+ *
+ * @return string
+ */
+function plugin_accounts_addDefaultWhere($type)
+{
+    switch ($type) {
+        case Account::class:
+            $who = Session::getLoginUserID();
+            if (!Session::haveRight("plugin_accounts_see_all_users", 1)) {
+                if (count($_SESSION["glpigroups"])
+                    && Session::haveRight("plugin_accounts_my_groups", 1)) {
+
+                    $criteria = [
+                        'OR' => [
+                            ['glpi_plugin_accounts_accounts.groups_id' => $_SESSION['glpigroups']],
+                            ['glpi_plugin_accounts_accounts.users_id' => $who],
+                            ]
+                    ];
+
+                    return $criteria;
+
+                } else { // Only personal ones
+//                    return " `glpi_plugin_accounts_accounts`.`users_id` = '$who' ";
+                    $criteria = ['glpi_plugin_accounts_accounts.users_id' => $who];
+
+                    return $criteria;
+                }
+            }
+    }
+    return "";
+}
+
+/**
+ * @param $type
+ *
+ * @return bool
+ */
+function plugin_accounts_forceGroupBy($type)
+{
+    return true;
+    switch ($type) {
+        case Account::class:
+            return true;
+    }
+    return false;
+}
+
+/**
+ * @param $type
+ * @param $ID
+ * @param $data
+ * @param $num
+ *
+ * @return string
+ */
+function plugin_accounts_displayConfigItem($type, $ID, $data, $num)
+{
+    $searchopt  = SearchOption::getOptionsForItemtype($type);
+    $table     = $searchopt[$ID]["table"];
+    $field     = $searchopt[$ID]["field"];
+
+    switch ($table . '.' . $field) {
+        case "glpi_plugin_accounts_accounts.date_expiration":
+            if ($data[$num] <= date('Y-m-d') && !empty($data[$num])) {
+                return " class=\"deleted\" ";
+            }
+            break;
+    }
+    return "";
+}
+
+/**
+ * @param $type
+ * @param $ID
+ * @param $data
+ * @param $num
+ *
+ * @return string
+ */
+function plugin_accounts_giveItem($type, $ID, $data, $num)
+{
+    global $DB;
+
+    $dbu = new DbUtils();
+
+    $searchopt  = SearchOption::getOptionsForItemtype($type);
+    $table     = $searchopt[$ID]["table"];
+    $field     = $searchopt[$ID]["field"];
+
+    switch ($type) {
+        case Account::class:
+            switch ($table . '.' . $field) {
+                case "glpi_plugin_accounts_accounts_items.items_id":
+                    $out      = '';
+                    $accounts = (int) $data['id'];
+
+                    $device_iterator = $DB->request([
+                        'SELECT'   => 'itemtype',
+                        'DISTINCT' => true,
+                        'FROM'     => 'glpi_plugin_accounts_accounts_items',
+                        'WHERE'    => ['plugin_accounts_accounts_id' => $accounts],
+                        'ORDER'    => 'itemtype',
+                        'LIMIT'    => count(Account::getTypes(true)),
+                    ]);
+
+                    foreach ($device_iterator as $device) {
+                        $itemtype = $device['itemtype'];
+
+                        if (!class_exists($itemtype)) {
+                            continue;
+                        }
+                        $item = new $itemtype();
+                        if (!$item->canView()) {
+                            $out .= ' ';
+                            continue;
+                        }
+
+                        $table_item = $dbu->getTableForItemType($itemtype);
+
+                        $criteria = [
+                            'SELECT'     => "$table_item.id",
+                            'FROM'       => 'glpi_plugin_accounts_accounts_items',
+                            'INNER JOIN' => [
+                                $table_item => [
+                                    'ON' => [
+                                        'glpi_plugin_accounts_accounts_items' => 'items_id',
+                                        $table_item                           => 'id',
+                                    ],
+                                ],
+                            ],
+                            'WHERE'      => [
+                                'glpi_plugin_accounts_accounts_items.itemtype'                    => $itemtype,
+                                'glpi_plugin_accounts_accounts_items.plugin_accounts_accounts_id' => $accounts,
+                            ],
+                        ];
+
+                        // Entity itemtype has no entities_id foreign key to join on
+                        if ($itemtype != 'Entity') {
+                            $criteria['LEFT JOIN'] = [
+                                'glpi_entities' => [
+                                    'ON' => [
+                                        'glpi_entities' => 'id',
+                                        $table_item     => 'entities_id',
+                                    ],
+                                ],
+                            ];
+                            $criteria['ORDERBY'] = ['glpi_entities.completename', "$table_item.name"];
+                        } else {
+                            $criteria['ORDERBY'] = ["$table_item.completename", "$table_item.name"];
+                        }
+
+                        $criteria['WHERE'] += getEntitiesRestrictCriteria(
+                            $table_item,
+                            '',
+                            '',
+                            $item->maybeRecursive()
+                        );
+
+                        if ($item->maybeTemplate()) {
+                            $criteria['WHERE']["$table_item.is_template"] = 0;
+                        }
+
+                        $linked_iterator = $DB->request($criteria);
+                        if (count($linked_iterator) === 0) {
+                            $out .= ' ';
+                            continue;
+                        }
+                        foreach ($linked_iterator as $linked) {
+                            if ($item->getFromDB($linked['id'])) {
+                                $out .= $item::getTypeName() . " - " . $item->getLink() . "<br>";
+                            }
+                        }
+                    }
+                    return $out;
+            }
+            break;
+    }
+    return "";
+}
+
+////// SPECIFIC MODIF MASSIVE FUNCTIONS ///////
+
+/**
+ * @param $type
+ *
+ * @return array
+ */
+function plugin_accounts_MassiveActions($type)
+{
+    if (Plugin::isPluginActive('accounts')) {
+        if (in_array($type, Account::getTypes(true))) {
+            $icon = "<i class='".Account::getIcon()."'></i>";
+            return [
+                Account::class . MassiveAction::CLASS_ACTION_SEPARATOR . "add_item" =>
+                    $icon." ".__s('Associate to account', 'accounts'),
+            ];
+        }
+    }
+    return [];
+}
+
+/*
+function plugin_accounts_MassiveActionsProcess($data) {
+
+   $account_item = new Account_Item();
+
+   $res = array('ok' => 0,
+            'ko' => 0,
+            'noright' => 0);
+
+   switch ($data['action']) {
+
+      case "plugin_accounts_add_item" :
+         foreach ($data["item"] as $key => $val) {
+            if ($val == 1) {
+               $input = array('plugin_accounts_accounts_id' => $data['plugin_accounts_accounts_id'],
+                        'items_id'      => $key,
+                        'itemtype'      => $data['itemtype']);
+               if ($account_item->can(-1,'w',$input)) {
+                  if ($account_item->add($input)){
+                     $res['ok']++;
+                  } else {
+                     $res['ko']++;
+                  }
+               } else {
+                  $res['noright']++;
+               }
+            }
+         }
+         break;
+   }
+   return $res;
+}*/
+
+//////////////////////////////
+
+// Do special actions for dynamic report
+/*
+ function plugin_accounts_dynamicReport($parm) {
+
+if ($parm["item_type"]=='Report'
+         && isset($parm["id"])
+         && isset($parm["display_type"])) {
+
+$accounts = Report::queryAccountsList($parm);
+
+Report::showAccountsList($parm, $accounts);
+return true;
+}
+
+// Return false if no specific display is done, then use standard display
+return false;
+}*/
+
+function plugin_datainjection_populate_accounts()
+{
+    global $INJECTABLE_TYPES;
+    $INJECTABLE_TYPES[AccountInjection::class] = 'accounts';
+}

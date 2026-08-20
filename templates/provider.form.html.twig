@@ -148,25 +148,6 @@
                 <i class="ti ti-alert-triangle me-2"></i>
                 {{ __('Aucune empreinte Accounts disponible pour cette entité. Créez-en une dans le plugin Accounts (menu Accounts → Empreintes) avant de pouvoir créer le compte admin ici.', 'backupgestion') }}
             </div>
-            <div class="alert alert-secondary">
-                <strong>{{ __('Diagnostic temporaire', 'backupgestion') }}</strong> —
-                {{ __('entité de ce provider', 'backupgestion') }} : <code>{{ item.fields['entities_id'] }}</code>
-                <table class="table table-sm mt-2 mb-0">
-                    <thead><tr><th>id</th><th>name</th><th>entities_id</th><th>is_recursive</th></tr></thead>
-                    <tbody>
-                    {% for row in accountsDebugRows %}
-                        <tr>
-                            <td>{{ row.id }}</td>
-                            <td>{{ row.name }}</td>
-                            <td>{{ row.entities_id }}</td>
-                            <td>{{ row.is_recursive }}</td>
-                        </tr>
-                    {% else %}
-                        <tr><td colspan="4">{{ __('(table vide — aucune empreinte n\'existe du tout dans Accounts)', 'backupgestion') }}</td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
         {% endif %}
 
         <div class="mb-3 row">
@@ -205,10 +186,19 @@
             </div>
         </div>
 
-        {{ fields.dropdownField('User', 'accounts_users_id', item.fields['accounts_users_id'] ?? 0, __('Utilisateur concerné (défaut)', 'backupgestion'), {'display_emptychoice': true}) }}
-        {{ fields.dropdownField('User', 'accounts_users_id_tech', item.fields['accounts_users_id_tech'] ?? 0, __('Technicien responsable (défaut)', 'backupgestion'), {'display_emptychoice': true}) }}
-        {{ fields.dropdownField('Group', 'accounts_groups_id', item.fields['accounts_groups_id'] ?? 0, __('Groupe concerné (défaut)', 'backupgestion'), {'display_emptychoice': true}) }}
-        {{ fields.dropdownField('Group', 'accounts_groups_id_tech', item.fields['accounts_groups_id_tech'] ?? 0, __('Groupe responsable (défaut)', 'backupgestion'), {'display_emptychoice': true}) }}
+        {# Mêmes restrictions de droit que les champs natifs d'Accounts (users_id: 'all',
+           users_id_tech: 'interface') — pour la même raison que les groupes ci-dessous. #}
+        {{ fields.dropdownField('User', 'accounts_users_id', item.fields['accounts_users_id'] ?? 0, __('Utilisateur concerné (défaut)', 'backupgestion'), {'display_emptychoice': true, 'right': 'all'}) }}
+        {{ fields.dropdownField('User', 'accounts_users_id_tech', item.fields['accounts_users_id_tech'] ?? 0, __('Technicien responsable (défaut)', 'backupgestion'), {'display_emptychoice': true, 'right': 'interface'}) }}
+        {# Même filtre que le champ "Groupe concerné" natif d'Accounts : uniquement les
+           groupes marqués "groupe de contact" (is_itemgroup). #}
+        {{ fields.dropdownField('Group', 'accounts_groups_id', item.fields['accounts_groups_id'] ?? 0, __('Groupe concerné (défaut)', 'backupgestion'), {'display_emptychoice': true, 'condition': {'is_itemgroup': 1}}) }}
+        {# Même filtre que le champ "Groupe responsable" natif d'Accounts
+           (accounts/templates/account.html.twig) : uniquement les groupes marqués
+           "groupe technicien" (is_assign) — sinon une valeur choisie ici peut ne plus
+           apparaître comme sélectionnable sur la fiche du compte créé, et son
+           groupe reste difficile à retirer/effacer proprement (retour de Luc). #}
+        {{ fields.dropdownField('Group', 'accounts_groups_id_tech', item.fields['accounts_groups_id_tech'] ?? 0, __('Groupe responsable (défaut)', 'backupgestion'), {'display_emptychoice': true, 'condition': {'is_assign': 1}}) }}
 
         <div class="mb-3 row">
             <label class="col-xxl-4 col-form-label">{{ __('Associable à un ticket', 'backupgestion') }}</label>
@@ -220,7 +210,12 @@
         </div>
 
         {% if item.fields['id'] %}
-            {{ fields.smallTitle(__('Créer le compte admin Acronis', 'backupgestion')) }}
+            {{ fields.smallTitle(__('Créer un compte utilisateur Acronis', 'backupgestion')) }}
+
+            <div class="alert alert-info">
+                <i class="ti ti-info-circle me-2"></i>
+                {{ __('Ce formulaire crée un nouveau compte à chaque utilisation — il ne montre pas les comptes déjà créés. Retrouvez la liste des comptes liés à ce provider dans l\'onglet "Comptes associés" (Accounts) de cette fiche, une fois enregistrée.', 'backupgestion') }}
+            </div>
 
             <div class="mb-3 row">
                 <label class="col-xxl-4 col-form-label">{{ __('Identifiant', 'backupgestion') }}</label>
@@ -234,6 +229,13 @@
                     <input type="password" id="bg-accounts-password" class="form-control"
                            autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly')"
                            data-lpignore="true" data-1p-ignore />
+                </div>
+            </div>
+            <div class="mb-3 row">
+                <label class="col-xxl-4 col-form-label">{{ __('Administrateur', 'backupgestion') }}</label>
+                <div class="col-xxl-8">
+                    <input type="checkbox" id="bg-accounts-is-admin" class="form-check-input" />
+                    <span class="form-text d-inline">{{ __('Change le type de compte en "BackupGestion — Admin compte client Acronis" au lieu du type par défaut configuré ci-dessus.', 'backupgestion') }}</span>
                 </div>
             </div>
             <div class="mb-3 row">
@@ -291,10 +293,12 @@
                             id: createBtn.dataset.id,
                             accounts_login: document.getElementById('bg-accounts-login').value,
                             accounts_password: document.getElementById('bg-accounts-password').value,
+                            accounts_is_admin: document.getElementById('bg-accounts-is-admin').checked ? '1' : '',
                             accounts_key: document.getElementById('bg-accounts-key').value
                         }, function(d, el) {
                             el.innerHTML = "<span class='badge bg-success'>" + {{ __('Compte créé et lié', 'backupgestion')|json_encode|raw }} + " (#" + d.accounts_id + ")</span>";
                             document.getElementById('bg-accounts-password').value = '';
+                            document.getElementById('bg-accounts-is-admin').checked = false;
                             document.getElementById('bg-accounts-key').value = '';
                         });
                     });

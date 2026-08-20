@@ -127,25 +127,6 @@ class AccountsVault
         return $ancestors;
     }
 
-    /**
-     * Diagnostic temporaire (à retirer une fois le filtrage d'entité validé en
-     * conditions réelles) : contenu brut de la table des empreintes, sans jamais
-     * exposer le vérificateur de clé (colonne "hash") — seulement id/nom/entité.
-     */
-    public static function debugHashRows(): array
-    {
-        global $DB;
-        $table = 'glpi_plugin_accounts_hashes';
-        if (!self::isAvailable() || !$DB->tableExists($table)) {
-            return [];
-        }
-        $rows = [];
-        foreach ($DB->request(['FROM' => $table, 'SELECT' => ['id', 'name', 'entities_id', 'is_recursive']]) as $row) {
-            $rows[] = $row;
-        }
-        return $rows;
-    }
-
     // ------------------------------------------------------------------
     // Cache de session de la clé de déchiffrement Accounts (CDC 4.4 ter)
     // Uniquement en $_SESSION, jamais en base ni sur disque ; une entrée par
@@ -253,14 +234,39 @@ class AccountsVault
     }
 
     // ------------------------------------------------------------------
-    // Création du compte admin Acronis (catégorie b — CDC 4.4/4.4 bis)
+    // Création d'un compte utilisateur Acronis (catégorie b — CDC 4.4/4.4 bis)
     // ------------------------------------------------------------------
 
+    /** Nom du type de compte Accounts dédié, provisionné à l'installation (best-effort). */
+    private const ADMIN_ACCOUNTTYPE_NAME = 'BackupGestion — Admin compte client Acronis';
+
     /**
-     * Crée un compte Accounts pour ce provider ("Admin compte client Acronis"),
-     * pré-rempli depuis les "Valeurs par défaut Accounts" (4.4 bis), chiffré via
-     * la vraie API Accounts (AccountCrypto), puis lié au provider (Account_Item).
+     * Résout l'ID du type de compte Accounts dédié à BackupGestion (auto-provisionné à
+     * l'installation par provisionDefaultAccountType()) — utilisé quand la case
+     * "Administrateur" est cochée, pour distinguer ce compte du type par défaut configuré
+     * sur le provider. Retourne null si introuvable (ex. provisionnement best-effort qui
+     * a échoué) : l'appelant retombe alors sur le type par défaut du provider.
+     */
+    public static function getAdminAccountTypeId(): ?int
+    {
+        global $DB;
+        $table = 'glpi_plugin_accounts_accounttypes';
+        if (!self::isAvailable() || !$DB->tableExists($table)) {
+            return null;
+        }
+        $row = $DB->request(['FROM' => $table, 'WHERE' => ['name' => __(self::ADMIN_ACCOUNTTYPE_NAME, 'backupgestion')]])->current();
+        return $row ? (int)$row['id'] : null;
+    }
+
+    /**
+     * Crée un compte Accounts pour ce provider, pré-rempli depuis les "Valeurs par
+     * défaut Accounts" (4.4 bis), chiffré via la vraie API Accounts (AccountCrypto),
+     * puis lié au provider (Account_Item).
      *
+     * @param bool $isAdmin Si vrai, force le type de compte sur "BackupGestion — Admin
+     *        compte client Acronis" (auto-provisionné) au lieu du type par défaut
+     *        configuré sur le provider — pour distinguer un compte administrateur d'un
+     *        simple compte utilisateur.
      * @return int L'ID du compte Accounts créé.
      * @throws \RuntimeException si le plugin Accounts est absent, si aucune
      *         empreinte n'est configurée/résolue, ou si la création échoue.
@@ -269,7 +275,8 @@ class AccountsVault
         Provider $provider,
         string $login,
         string $password,
-        ?string $typedKey = null
+        ?string $typedKey = null,
+        bool $isAdmin = false
     ): int {
         if (!self::isAvailable()) {
             throw new \RuntimeException(__('Le plugin Accounts n\'est pas disponible.', 'backupgestion'));
@@ -290,12 +297,19 @@ class AccountsVault
             throw new \RuntimeException(__('Identifiant et mot de passe requis.', 'backupgestion'));
         }
 
+        $accounttypeId = (int)($provider->fields['accounts_accounttype_id'] ?? 0);
+        if ($isAdmin) {
+            $accounttypeId = self::getAdminAccountTypeId() ?? $accounttypeId;
+        }
+
+        $namePrefix = $isAdmin ? __('[Sauvegarde] Admin %s', 'backupgestion') : __('[Sauvegarde] Utilisateur %s', 'backupgestion');
+
         $input = [
-            'name'                             => sprintf(__('[Sauvegarde] Admin %s', 'backupgestion'), $provider->fields['name'] ?? ''),
+            'name'                             => sprintf($namePrefix, $provider->fields['name'] ?? ''),
             'login'                            => $login,
             'encrypted_password'               => addslashes(\GlpiPlugin\Accounts\AccountCrypto::encrypt($password, $fingerprint)),
             'plugin_accounts_hashes_id'        => $hashId,
-            'plugin_accounts_accounttypes_id'  => (int)($provider->fields['accounts_accounttype_id'] ?? 0),
+            'plugin_accounts_accounttypes_id'  => $accounttypeId,
             'plugin_accounts_accountstates_id' => (int)($provider->fields['accounts_accountstates_id'] ?? 0),
             'entities_id'                      => (int)($provider->fields['entities_id'] ?? 0),
             'is_recursive'                     => (int)($provider->fields['is_recursive'] ?? 0),

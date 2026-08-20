@@ -417,7 +417,6 @@ class Provider extends CommonDBTM
                 'accountsTypes'        => $accountsTypes,
                 'accountsStates'       => $accountsStates,
                 'accountsHashId'       => (int)($this->fields['accounts_hash_id'] ?? 0),
-                'accountsDebugRows'    => ($accountsAvailable && empty($accountsHashes)) ? AccountsVault::debugHashRows() : [],
             ]
         );
 

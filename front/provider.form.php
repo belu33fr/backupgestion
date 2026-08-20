@@ -65,7 +65,8 @@ if (isset($_POST['discover_children'])) {
             $provider,
             (string)($_POST['accounts_login'] ?? ''),
             (string)($_POST['accounts_password'] ?? ''),
-            ($_POST['accounts_key'] ?? '') !== '' ? (string)$_POST['accounts_key'] : null
+            ($_POST['accounts_key'] ?? '') !== '' ? (string)$_POST['accounts_key'] : null,
+            !empty($_POST['accounts_is_admin'])
         );
         echo json_encode(['success' => true, 'accounts_id' => $newID]);
     } catch (\Throwable $e) {

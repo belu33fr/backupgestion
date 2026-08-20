@@ -1,0 +1,71 @@
+<?php
+
+/*
+ -------------------------------------------------------------------------
+ accounts plugin for GLPI
+ Copyright (C) 2015-2026 by the accounts Development Team.
+
+ https://github.com/InfotelGLPI/accounts
+ -------------------------------------------------------------------------
+
+ LICENSE
+
+ This file is part of accounts.
+
+ accounts is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 3 of the License, or
+ (at your option) any later version.
+
+ accounts is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with accounts. If not, see <http://www.gnu.org/licenses/>.
+ --------------------------------------------------------------------------
+ */
+
+use GlpiPlugin\Accounts\Account;
+
+$AJAX_INCLUDE = 1;
+
+header("Content-Type: text/html; charset=UTF-8");
+Html::header_nocache();
+
+Session::checkRight("plugin_accounts", READ);
+
+if (isset($_POST['idcrypt'])) {
+    // Object-level check: only log (and thus acknowledge decryption of) an account the
+    // caller may actually read — prevents writing history against an arbitrary account id.
+    $account = new Account();
+    if (!$account->can((int) $_POST['idcrypt'], READ)) {
+        throw new \Glpi\Exception\Http\AccessDeniedHttpException();
+    }
+
+    //History log
+    $changes[0] = 15;
+    $changes[1] = "";
+    if (isset($_POST['from']) && $_POST['from'] == 'account') {
+        $changes[2] = __s('Decrypted from account', 'accounts');
+    } else {
+        $changes[2] = __s('Decrypted from item', 'accounts');
+        if (isset($_POST['items_id']) && isset($_POST['itemtype'])) {
+            $item = getItemForItemtype($_POST['itemtype']);
+            // Only disclose the linked item's name when the caller can read that item too.
+            if ($item !== false && $item->can((int) $_POST['items_id'], READ)) {
+                $changes[2] .= " " . $item->getName();
+            }
+        }
+    }
+
+    Log::history(
+        intval($_POST['idcrypt']),
+        Account::class,
+        $changes,
+        0,
+        Log::HISTORY_LOG_SIMPLE_MESSAGE
+    );
+
+}

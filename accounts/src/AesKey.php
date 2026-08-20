@@ -1,0 +1,340 @@
+<?php
+
+/*
+ -------------------------------------------------------------------------
+ accounts plugin for GLPI
+ Copyright (C) 2015-2026 by the accounts Development Team.
+
+ https://github.com/InfotelGLPI/accounts
+ -------------------------------------------------------------------------
+
+ LICENSE
+
+ This file is part of accounts.
+
+ accounts is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 3 of the License, or
+ (at your option) any later version.
+
+ accounts is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with accounts. If not, see <http://www.gnu.org/licenses/>.
+ --------------------------------------------------------------------------
+ */
+
+namespace GlpiPlugin\Accounts;
+
+use CommonDBTM;
+use CommonGLPI;
+use DBConnection;
+use DbUtils;
+use Glpi\Application\View\TemplateRenderer;
+use Html;
+use Migration;
+use Session;
+use Toolbox;
+
+/**
+ * Class AesKey
+ */
+class AesKey extends CommonDBTM
+{
+    public static $rightname = "plugin_accounts_hash";
+
+    /**
+     * The master AES key is stored encrypted at rest with GLPIKey and must never
+     * be disclosed in logs, history or exports.
+     * @var string[]
+     */
+    public static $undisclosedFields = ['name'];
+
+    /**
+     * @var hash
+     */
+    private $h;
+
+    /**
+     * AesKey constructor.
+     */
+    public function __construct()
+    {
+        $this->h = new Hash();
+    }
+
+    public static function getIcon()
+    {
+        return "ti ti-lock-open";
+    }
+
+    protected function computeFriendlyName()
+    {
+        return _n('Encryption key', 'Encryption key', 1, 'accounts');
+    }
+
+    /**
+     * @param int $nb
+     * @return string
+     */
+    public static function getTypeName($nb = 0)
+    {
+        return _n('Encryption key', 'Encryption key', $nb, 'accounts');
+    }
+
+    /**
+     * @param CommonGLPI $item
+     * @param int $withtemplate
+     * @return string
+     */
+    public function getTabNameForItem(CommonGLPI $item, $withtemplate = 0)
+    {
+
+        if (!$withtemplate) {
+            switch ($item->getType()) {
+                case Hash::class:
+                    if (Session::haveRight(static::$rightname, UPDATE)) {
+                        return self::createTabEntry(__s('Save the encryption key', 'accounts'));
+                    }
+                    return "";
+                case __CLASS__:
+                    return self::createTabEntry(self::getTypeName());
+            }
+        }
+        return '';
+    }
+
+    /**
+     * @param CommonGLPI $item
+     * @param int $tabnum
+     * @param int $withtemplate
+     * @return bool
+     */
+    public static function displayTabContentForItem(CommonGLPI $item, $tabnum = 1, $withtemplate = 0)
+    {
+
+        $self = new self();
+
+        switch ($item->getType()) {
+            case Hash::class:
+                $key = self::checkIfAesKeyExists($item->getID());
+                if ($key) {
+                    $self->showAesKey($item->getID());
+                }
+                if (!$key) {
+                    $self->showForm("", ['plugin_accounts_hashes_id' => $item->getID()]);
+                }
+                break;
+            case __CLASS__:
+                $item->showForm($item->getID());
+        }
+        return true;
+    }
+
+
+    /**
+     * @param $plugin_accounts_hashes_id
+     * @return bool
+     */
+    public static function checkIfAesKeyExists($plugin_accounts_hashes_id)
+    {
+
+        $aeskey = false;
+        if ($plugin_accounts_hashes_id) {
+            $dbu = new DbUtils();
+            $devices = $dbu->getAllDataFromTable(
+                "glpi_plugin_accounts_aeskeys",
+                ["plugin_accounts_hashes_id" => $plugin_accounts_hashes_id]
+            );
+            if (!empty($devices)) {
+                foreach ($devices as $device) {
+                    // Stored encrypted at rest -> return the decrypted master key
+                    $aeskey = (new \GLPIKey())->decrypt($device["name"]);
+                    return $aeskey;
+                }
+            } else {
+                return $aeskey;
+            }
+        }
+    }
+
+    /**
+     * @param array $options
+     * @return array
+     */
+    public function defineTabs($options = [])
+    {
+
+        $ong = [];
+        $this->addStandardTab(__CLASS__, $ong, $options);
+        return $ong;
+    }
+
+    /**
+     * @param $ID
+     * @param array $options
+     */
+    public function showForm($ID, $options = [])
+    {
+        $restrict = getEntitiesRestrictCriteria("glpi_plugin_accounts_hashes", '', '', $this->h->maybeRecursive());
+        $nbhashes = countElementsInTable("glpi_plugin_accounts_hashes", $restrict);
+
+        $this->initForm($ID, $options);
+        TemplateRenderer::getInstance()->display('@accounts/aeskey.html.twig', [
+            'item' => $this,
+            'nbhashes' => $nbhashes,
+            'params' => $options,
+        ]);
+    }
+
+    /**
+     * @param  $input
+     * @return mixed[]
+     */
+    public function prepareInputForAdd($input)
+    {
+        // Not attached to hash -> not added
+        if (!isset($input['plugin_accounts_hashes_id']) || $input['plugin_accounts_hashes_id'] <= 0) {
+            return false;
+        }
+        // Encrypt the master key at rest (stored as GLPIKey ciphertext)
+        if (isset($input['name']) && $input['name'] !== '') {
+            $input['name'] = (new \GLPIKey())->encrypt($input['name']);
+        }
+        return $input;
+    }
+
+    /**
+     * @param  $input
+     * @return mixed[]
+     */
+    public function prepareInputForUpdate($input)
+    {
+        // Encrypt the master key at rest (stored as GLPIKey ciphertext)
+        if (isset($input['name']) && $input['name'] !== '') {
+            $input['name'] = (new \GLPIKey())->encrypt($input['name']);
+        }
+        return $input;
+    }
+
+    /**
+     * Return the decrypted master AES key value.
+     *
+     * @return string
+     */
+    public function getDecryptedName()
+    {
+        return (new \GLPIKey())->decrypt($this->fields['name'] ?? '');
+    }
+
+    /**
+     * @param $ID
+     */
+    public function showAesKey($ID)
+    {
+        global $DB;
+
+        $this->h->getFromDB($ID);
+
+        Session::initNavigateListItems("AesKey", _n('Fingerprint', 'Fingerprints', 1,'accounts') . " = " . $this->h->fields["name"]);
+
+        $candelete = Session::haveRight(self::$rightname, DELETE);
+
+        $iterator = $DB->request([
+            'FROM'      => 'glpi_plugin_accounts_aeskeys',
+            'WHERE'     => [
+                'plugin_accounts_hashes_id'  => $ID
+            ],
+        ]);
+
+        $rand = mt_rand();
+        echo "<div class='left'>";
+
+        echo Html::hidden('plugin_accounts_hashes_id', ['value' => $ID]);
+
+        if ($candelete && count($iterator) > 0) {
+            Html::openMassiveActionsForm('massaeskey' . $rand);
+            $massiveactionparams = ['item' => __CLASS__, 'container' => 'massaeskey' . $rand];
+            Html::showMassiveActions($massiveactionparams);
+        }
+
+        echo "<table class='tab_cadre_fixe'>";
+
+        echo "<tr><th colspan='" . ($candelete ? 2 : 1) . "'>" . __s('Encryption key', 'accounts') . "</th></tr>";
+        echo "<tr>";
+        if ($candelete && count($iterator) > 0) {
+            echo "<th width='10'>" . Html::getCheckAllAsCheckbox('massaeskey' . $rand) . "</th>";
+        }
+        echo "<th class='left'>" . __s('Name') . "</th>";
+        echo "</tr>";
+
+        if (count($iterator) > 0) {
+            foreach ($iterator as $data) {
+                Session::addToNavigateListItems("AesKey", $data['id']);
+                $name = "item[" . $data["id"] . "]";
+                echo Html::hidden($name, ['value' => $ID]);
+                echo "<tr class='tab_bg_1 center'>";
+                if ($candelete) {
+                    echo "<td width='10'>";
+                    Html::showMassiveActionCheckBox(__CLASS__, $data["id"]);
+                    echo "</td>";
+                }
+                $link = Toolbox::getItemTypeFormURL(AesKey::class);
+                echo "<td class='left'><a href='" . $link . "?id=" . $data["id"] . "&plugin_accounts_hashes_id=" . $ID . "'>";
+                echo __s('Encryption key', 'accounts') . "</a></td>";
+                echo "</tr>";
+            }
+
+            echo "<tr>";
+            if ($candelete && count($iterator) > 0) {
+                echo "<th width='10'>" . Html::getCheckAllAsCheckbox('massaeskey' . $rand) . "</th>";
+            }
+            echo "<th class='left'>" . __s('Name') . "</th>";
+            echo "</tr>";
+            echo "</table>";
+
+            if ($candelete) {
+                $massiveactionparams['ontop'] = false;
+                Html::showMassiveActions($massiveactionparams);
+                Html::closeForm();
+            }
+        } else {
+            echo "</table>";
+        }
+        echo "</div>";
+    }
+
+    public function getForbiddenStandardMassiveAction()
+    {
+
+        $forbidden   = parent::getForbiddenStandardMassiveAction();
+        $forbidden[] = 'update';
+        $forbidden[] = 'add_note';
+        return $forbidden;
+    }
+
+    public static function install(Migration $migration)
+    {
+        global $DB;
+
+        $default_charset   = DBConnection::getDefaultCharset();
+        $default_collation = DBConnection::getDefaultCollation();
+        $default_key_sign  = DBConnection::getDefaultPrimaryKeySignOption();
+        $table  = self::getTable();
+
+        if (!$DB->tableExists($table)) {
+            $query = "CREATE TABLE `$table` (
+                        `id` int {$default_key_sign} NOT NULL auto_increment,
+                        `name` text collate utf8mb4_unicode_ci default NULL,
+                         `plugin_accounts_hashes_id` int unsigned NOT NULL default '0',
+                         PRIMARY KEY  (`id`),
+                         KEY `plugin_accounts_hashes_id` (`plugin_accounts_hashes_id`)
+               ) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation} ROW_FORMAT=DYNAMIC;";
+
+            $DB->doQuery($query);
+        }
+    }
+}

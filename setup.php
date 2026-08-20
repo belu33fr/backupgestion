@@ -41,9 +41,16 @@ function plugin_init_backupgestion(): void
     // Initialiser les droits dans la session courante
     Right::initProfile();
 
-    // NB : tâche CRON (détection périodique des rattachements, 4.7) et page de
-    // configuration ("Valeurs par défaut Accounts", 4.4 bis) arrivent aux jalons 2/3 —
-    // volontairement absents de ce squelette (jalon 1).
+    // Enregistre Provider comme type "associable" auprès du plugin Accounts (CDC 4.4) :
+    // ajoute automatiquement l'onglet natif "Comptes associés" (liste, déchiffrement,
+    // etc.) sur la fiche provider — doit être appelé avant le hook POST_INIT d'Accounts,
+    // qui construit ses onglets à partir des types enregistrés à ce stade.
+    if (class_exists('\GlpiPlugin\Accounts\Account')) {
+        \GlpiPlugin\Accounts\Account::registerType(Provider::class);
+    }
+
+    // NB : tâche CRON (détection périodique des rattachements, 4.7) arrive au jalon 3 —
+    // volontairement absente de ce squelette.
 }
 
 function plugin_version_backupgestion(): array

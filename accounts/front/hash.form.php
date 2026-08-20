@@ -1,0 +1,109 @@
+<?php
+
+/*
+ -------------------------------------------------------------------------
+ accounts plugin for GLPI
+ Copyright (C) 2015-2026 by the accounts Development Team.
+
+ https://github.com/InfotelGLPI/accounts
+ -------------------------------------------------------------------------
+
+ LICENSE
+
+ This file is part of accounts.
+
+ accounts is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 3 of the License, or
+ (at your option) any later version.
+
+ accounts is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with accounts. If not, see <http://www.gnu.org/licenses/>.
+ --------------------------------------------------------------------------
+ */
+
+use GlpiPlugin\Accounts\Account;
+use GlpiPlugin\Accounts\Hash;
+
+if (!isset($_GET["id"])) {
+    $_GET["id"] = "";
+}
+
+Session::checkRight("plugin_accounts_hash", READ);
+
+$hashClass = new Hash();
+$dbu       = new DbUtils();
+
+$update = 0;
+if ($dbu->countElementsInTable("glpi_plugin_accounts_accounts") > 0) {
+    $update = 1;
+}
+
+if (isset($_POST["add"])) {
+    $hashClass->check(-1, CREATE, $_POST);
+    $newID = $hashClass->add($_POST);
+    $hashClass->redirectToList();
+} elseif (isset($_POST["update"]) && $_POST["hash"]) {
+    $hashClass->check($_POST['id'], UPDATE);
+    $hashClass->update($_POST);
+    Html::back();
+} elseif (isset($_POST["purge"])) {
+    $hashClass->check($_POST['id'], DELETE);
+    $hashClass->delete($_POST);
+    $hashClass->redirectToList();
+} elseif (isset($_POST['updatehash'])) {
+
+    // Mass re-encryption of every password/TOTP secret of the entity: require the UPDATE right,
+    // like the other write branches (the READ header check alone is not enough for a write operation).
+    Session::checkRight("plugin_accounts_hash", UPDATE);
+
+    if (isset($_POST["aeskeynew"]) && isset($_POST["aeskey"])) {
+        if ($hashClass->getFromDB($_POST["id"])) {
+            // The UPDATE right can be recursive/global: restrict the targeted hash to an
+            // entity the user actually has access to, so it can't rotate another entity's key.
+            if (!Session::haveAccessToEntity($hashClass->fields['entities_id'])) {
+                throw new \Glpi\Exception\Http\AccessDeniedHttpException();
+            }
+            $oldAeskey = $_POST["aeskey"];
+            $storedHash = $hashClass->fields['hash'];
+
+            // Calcul double SHA256 côté PHP (compatible avec SHA256 JS classique)
+            $hashCheck = hash("sha256", hash("sha256", $oldAeskey));
+
+            if (!hash_equals($storedHash, $hashCheck)) {
+                Session::addMessageAfterRedirect(
+                    __s('Wrong encryption key', 'accounts'),
+                    true,
+                    ERROR
+                );
+                Html::back();
+            } else {
+                // Clé correcte, mise à jour avec la nouvelle clé
+                Hash::updateHash($_POST["aeskey"], $_POST["aeskeynew"], $_POST["id"]);
+                Session::addMessageAfterRedirect(
+                    __s('Encryption key modified', 'accounts'),
+                    true
+                );
+                Html::back();
+            }
+        }
+    } else {
+        Session::addMessageAfterRedirect(
+            __s('The old or the new encryption key can not be empty', 'accounts'),
+            true,
+            ERROR
+        );
+        Html::back();
+    }
+} else {
+    Html::header(Account::getTypeName(2), '', "admin", Account::class, "hash");
+
+    $options = ["id" => $_GET['id'], "update" => false];
+    $hashClass->display($options);
+    Html::footer();
+}
