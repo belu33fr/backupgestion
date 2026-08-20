@@ -49,26 +49,40 @@ if (isset($_POST['discover_children'])) {
     }
     exit;
 
-} elseif (isset($_POST['link_accounts_admin'])) {
-    // Associe (Account_Item) un compte Accounts déjà créé (catégorie b, via la fiche
-    // native Accounts) à ce provider — aucune donnée sensible ne transite ici (CDC 4.4).
+} elseif (isset($_POST['create_accounts_admin'])) {
+    // Crée le compte admin Acronis dans Accounts (catégorie b — CDC 4.4/4.4 bis) et le
+    // lie à ce provider. Le mot de passe et la clé tapée ne transitent jamais au-delà de
+    // cette requête (chiffrement immédiat, clé éventuellement mise en cache de session
+    // uniquement — CDC 4.4 ter).
     header('Content-Type: application/json');
-    $id        = (int)($_POST['id'] ?? 0);
-    $accountId = (int)($_POST['accounts_account_id'] ?? 0);
+    $id = (int)($_POST['id'] ?? 0);
     if (!$provider->getFromDB($id) || !$provider->can($id, UPDATE)) {
         echo json_encode(['success' => false, 'message' => __('Accès refusé.', 'backupgestion')]);
         exit;
     }
-    if ($accountId <= 0) {
-        echo json_encode(['success' => false, 'message' => __('Identifiant de compte Accounts invalide.', 'backupgestion')]);
-        exit;
-    }
     try {
-        $ok = AccountsVault::linkToItem($accountId, Provider::class, $id);
-        echo json_encode(['success' => $ok]);
+        $newID = AccountsVault::createAdminAccount(
+            $provider,
+            (string)($_POST['accounts_login'] ?? ''),
+            (string)($_POST['accounts_password'] ?? ''),
+            ($_POST['accounts_key'] ?? '') !== '' ? (string)$_POST['accounts_key'] : null
+        );
+        echo json_encode(['success' => true, 'accounts_id' => $newID]);
     } catch (\Throwable $e) {
         echo json_encode(['success' => false, 'message' => $e->getMessage()]);
     }
+    exit;
+
+} elseif (isset($_POST['forget_accounts_key'])) {
+    header('Content-Type: application/json');
+    $id     = (int)($_POST['id'] ?? 0);
+    $hashId = (int)($_POST['accounts_hash_id'] ?? 0);
+    if (!$provider->getFromDB($id) || !$provider->can($id, UPDATE)) {
+        echo json_encode(['success' => false, 'message' => __('Accès refusé.', 'backupgestion')]);
+        exit;
+    }
+    AccountsVault::forgetKey($hashId > 0 ? $hashId : null);
+    echo json_encode(['success' => true]);
     exit;
 
 } elseif (isset($_POST['test_connection'])) {

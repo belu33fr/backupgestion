@@ -341,11 +341,23 @@ class Provider extends CommonDBTM
             }
         }
 
-        $entitiesId          = (int)($this->fields['entities_id'] ?? 0);
-        $accountsAvailable   = AccountsVault::isAvailable();
-        $accountsAdminAddUrl = '';
-        if ($accountsAvailable && ($this->fields['id'] ?? 0)) {
-            $accountsAdminAddUrl = AccountsVault::buildAdminAccountAddUrl($this);
+        $entitiesId        = (int)($this->fields['entities_id'] ?? 0);
+        // Zone "bonus" — ne doit jamais empêcher l'affichage de la fiche : toute erreur
+        // inattendue ici (ex. plugin Accounts présent mais incompatible) est absorbée,
+        // la fiche s'affiche alors comme si Accounts était indisponible.
+        $accountsAvailable = false;
+        $accountsHashes    = [];
+        $accountsTypes     = [];
+        $accountsStates    = [];
+        try {
+            $accountsAvailable = AccountsVault::isAvailable();
+            if ($accountsAvailable) {
+                $accountsHashes = AccountsVault::listHashes($entitiesId);
+                $accountsTypes  = AccountsVault::listAccountTypes($entitiesId);
+                $accountsStates = AccountsVault::listAccountStates($entitiesId);
+            }
+        } catch (\Throwable $e) {
+            $accountsAvailable = false;
         }
 
         \Glpi\Application\View\TemplateRenderer::getInstance()->display(
@@ -360,10 +372,10 @@ class Provider extends CommonDBTM
                 'children'             => $children,
                 'webdir'               => Plugin::getWebDir('backupgestion'),
                 'accountsAvailable'    => $accountsAvailable,
-                'accountsHashes'       => $accountsAvailable ? AccountsVault::listHashes($entitiesId) : [],
-                'accountsTypes'        => $accountsAvailable ? AccountsVault::listAccountTypes($entitiesId) : [],
-                'accountsStates'       => $accountsAvailable ? AccountsVault::listAccountStates($entitiesId) : [],
-                'accountsAdminAddUrl'  => $accountsAdminAddUrl,
+                'accountsHashes'       => $accountsHashes,
+                'accountsTypes'        => $accountsTypes,
+                'accountsStates'       => $accountsStates,
+                'accountsHashId'       => (int)($this->fields['accounts_hash_id'] ?? 0),
             ]
         );
 

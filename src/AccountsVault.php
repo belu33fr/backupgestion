@@ -5,23 +5,26 @@ namespace GlpiPlugin\Backupgestion;
 /**
  * Passerelle vers le plugin Accounts (catégorie b — CDC 3.3/4.4).
  *
- * BackupGestion ne réimplémente JAMAIS le chiffrement interne d'Accounts
- * (AccountCrypto) : la création d'un compte Accounts (login/mot de passe,
- * empreinte, clé de chiffrement) se fait toujours via la fiche native
- * d'Accounts, pré-remplie par lien profond depuis buildProviderPrefillQuery().
- * Ce principe de fragmentation (3.3) est respecté à la lettre : aucun secret
- * de catégorie (b) ne transite jamais par le code de BackupGestion.
+ * Confirmé par lecture directe du code source d'Accounts (Account.php,
+ * AccountCrypto.php, Hash.php, AesKey.php) :
+ *  - Account::add()/update() ne chiffrent jamais un mot de passe en clair
+ *    eux-mêmes : l'appelant doit fournir `encrypted_password` déjà chiffré
+ *    via AccountCrypto::encrypt($plaintext, $fingerprint).
+ *  - Le "fingerprint" (empreinte) associé à une Hash peut être disponible de
+ *    deux façons : soit une clé maîtresse stockée côté serveur (AesKey, liée
+ *    à la Hash, chiffrée at-rest par GLPIKey — accessible sans saisie
+ *    humaine), soit une clé tapée par un humain et vérifiée contre le
+ *    vérificateur stocké sur la Hash (glpi_plugin_accounts_hashes.hash,
+ *    format $pbkdf2$... ou legacy double-SHA256).
  *
- * Ce que cette classe fait, en revanche, en toute sécurité :
- *  - vérifier la disponibilité du plugin Accounts ;
- *  - lister les empreintes/types/statuts existants pour peupler la zone de
- *    configuration "Valeurs par défaut Accounts" de la fiche provider ;
- *  - construire l'URL de pré-remplissage vers la fiche d'ajout Accounts ;
- *  - lier (Account_Item) un compte Accounts déjà créé au provider concerné —
- *    une simple ligne de table de liaison, sans aucune donnée sensible.
+ * BackupGestion respecte le principe de fragmentation (3.3) : cette classe
+ * ne stocke JAMAIS la clé tapée au-delà d'un cache de session PHP à durée de
+ * vie limitée (4.4 ter), et ne persiste rien en base ni sur disque.
  */
 class AccountsVault
 {
+    private const SESSION_NS = 'plugin_backupgestion_accounts_keys';
+
     public static function isAvailable(): bool
     {
         return class_exists('\GlpiPlugin\Accounts\Account');
@@ -31,10 +34,6 @@ class AccountsVault
     // Listes de référence (lecture seule, aucune donnée sensible)
     // ------------------------------------------------------------------
 
-    /**
-     * Empreintes Accounts disponibles pour une entité donnée (et ses parentes,
-     * comme le fait Accounts nativement — une empreinte est définie par entité).
-     */
     public static function listHashes(int $entities_id): array
     {
         return self::listDropdownRows('glpi_plugin_accounts_hashes', $entities_id);
@@ -60,11 +59,12 @@ class AccountsVault
 
         $where = [];
         if ($DB->fieldExists($table, 'entities_id')) {
-            // Reprend le fonctionnement natif GLPI : l'entité demandée + ses parentes
-            // (une empreinte/un type définis sur une entité racine restent visibles
-            // pour ses sous-entités), plus l'entité racine (0, portée globale).
-            $ancestors = class_exists('\Entity') ? \Entity::getAncestorsOf($entities_id) : [];
-            $where['entities_id'] = array_unique(array_merge([0, $entities_id], array_values($ancestors)));
+            // Même mécanisme que Accounts::showForm() pour ses propres listes (empreintes,
+            // etc.) : getEntitiesRestrictCriteria() (fonction globale GLPI) gère nativement
+            // la récursivité — on l'utilise à l'identique plutôt que de réinventer la
+            // résolution des entités parentes.
+            $recursive = $DB->fieldExists($table, 'is_recursive');
+            $where     = getEntitiesRestrictCriteria($table, '', $entities_id, $recursive);
         }
 
         $rows = [];
@@ -75,56 +75,182 @@ class AccountsVault
     }
 
     // ------------------------------------------------------------------
-    // Lien profond vers la fiche d'ajout Accounts, pré-remplie
+    // Cache de session de la clé de déchiffrement Accounts (CDC 4.4 ter)
+    // Uniquement en $_SESSION, jamais en base ni sur disque ; une entrée par
+    // empreinte (plugin_accounts_hashes_id), timeout glissant.
+    // ------------------------------------------------------------------
+
+    public static function rememberKey(int $hashId, string $key, int $timeoutMinutes = 15): void
+    {
+        if ($hashId <= 0 || $key === '') {
+            return;
+        }
+        $_SESSION[self::SESSION_NS][$hashId] = [
+            'key'     => $key,
+            'expires' => time() + max(1, $timeoutMinutes) * 60,
+        ];
+    }
+
+    public static function getRememberedKey(int $hashId): ?string
+    {
+        $entry = $_SESSION[self::SESSION_NS][$hashId] ?? null;
+        if (!$entry) {
+            return null;
+        }
+        if (time() > $entry['expires']) {
+            unset($_SESSION[self::SESSION_NS][$hashId]);
+            return null;
+        }
+        return $entry['key'];
+    }
+
+    public static function forgetKey(?int $hashId = null): void
+    {
+        if ($hashId === null) {
+            unset($_SESSION[self::SESSION_NS]);
+            return;
+        }
+        unset($_SESSION[self::SESSION_NS][$hashId]);
+    }
+
+    // ------------------------------------------------------------------
+    // Résolution de l'empreinte (fingerprint) — jamais de secret persisté
+    // au-delà du cache de session ci-dessus.
     // ------------------------------------------------------------------
 
     /**
-     * Construit l'URL de la fiche "Ajouter un compte" d'Accounts, pré-remplie
-     * avec les "Valeurs par défaut Accounts" du provider (CDC 4.4 bis) — jamais
-     * le login ou le mot de passe, qui restent toujours saisis à la main dans
-     * Accounts lui-même. Retourne '' si le plugin Accounts est absent.
+     * Résout la clé de chiffrement (fingerprint) utilisable pour une Hash donnée :
+     *  1) clé maîtresse stockée côté serveur (AesKey) — aucune saisie requise ;
+     *  2) clé tapée transmise en paramètre, vérifiée contre le vérificateur stocké
+     *     sur la Hash (les deux formats — $pbkdf2$... et legacy double-SHA256 —
+     *     sont acceptés, comme AccountCrypto/crypt.js) ; mémorisée en session si
+     *     valide (CDC 4.4 ter) ;
+     *  3) clé précédemment mémorisée en session pour cette Hash.
+     * Retourne null si aucune de ces trois sources ne fournit une clé valide.
      */
-    public static function buildAdminAccountAddUrl(Provider $provider): string
+    public static function resolveFingerprint(int $hashId, ?string $typedKey = null, int $sessionTimeoutMinutes = 15): ?string
     {
-        if (!self::isAvailable()) {
-            return '';
+        if (!self::isAvailable() || $hashId <= 0) {
+            return null;
         }
 
-        $params = [
-            'name'                             => sprintf(__('[Sauvegarde] Admin %s', 'backupgestion'), $provider->fields['name'] ?? ''),
-            'entities_id'                      => (int)($provider->fields['entities_id'] ?? 0),
-            'is_recursive'                     => (int)($provider->fields['is_recursive'] ?? 0),
-        ];
-
-        $map = [
-            'plugin_accounts_hashes_id'        => 'accounts_hash_id',
-            'plugin_accounts_accounttypes_id'  => 'accounts_accounttype_id',
-            'plugin_accounts_accountstates_id' => 'accounts_accountstates_id',
-            'users_id'                         => 'accounts_users_id',
-            'users_id_tech'                    => 'accounts_users_id_tech',
-            'groups_id'                        => 'accounts_groups_id',
-            'groups_id_tech'                   => 'accounts_groups_id_tech',
-            'is_helpdesk_visible'              => 'accounts_is_helpdesk_visible',
-        ];
-        foreach ($map as $accountsField => $providerField) {
-            $value = (int)($provider->fields[$providerField] ?? 0);
-            if ($value > 0) {
-                $params[$accountsField] = $value;
+        if (class_exists('\GlpiPlugin\Accounts\AesKey')) {
+            $aeskey = new \GlpiPlugin\Accounts\AesKey();
+            if ($aeskey->getFromDBByCrit(['plugin_accounts_hashes_id' => $hashId]) && !empty($aeskey->fields['name'])) {
+                return $aeskey->getDecryptedName();
             }
         }
 
-        $formUrl = \Plugin::getWebDir('accounts', true) . '/front/account.form.php';
-        return $formUrl . '?' . http_build_query($params);
+        if (!empty($typedKey) && class_exists('\GlpiPlugin\Accounts\Hash')) {
+            $hash = new \GlpiPlugin\Accounts\Hash();
+            if ($hash->getFromDB($hashId) && self::verifyTypedKey($typedKey, (string)($hash->fields['hash'] ?? ''))) {
+                self::rememberKey($hashId, $typedKey, $sessionTimeoutMinutes);
+                return $typedKey;
+            }
+            // Clé tapée mais invalide : ne jamais retomber silencieusement sur le cache.
+            return null;
+        }
+
+        return self::getRememberedKey($hashId);
+    }
+
+    private static function verifyTypedKey(string $typedKey, string $storedVerifier): bool
+    {
+        if ($storedVerifier === '') {
+            return false;
+        }
+
+        if (str_starts_with($storedVerifier, '$pbkdf2$')) {
+            $parts = explode('$', ltrim($storedVerifier, '$'));
+            // parts: ['pbkdf2', iterations, salt_b64, derived_hex]
+            if (count($parts) < 4) {
+                return false;
+            }
+            $iterations = (int)$parts[1];
+            $salt       = base64_decode($parts[2], true);
+            $expected   = $parts[3];
+            if ($iterations <= 0 || $salt === false || $expected === '') {
+                return false;
+            }
+            $derived = hash_pbkdf2('sha256', $typedKey, $salt, $iterations, 0, false);
+            return hash_equals($expected, $derived);
+        }
+
+        // Format legacy : double SHA-256 du texte en clair.
+        return hash_equals($storedVerifier, hash('sha256', hash('sha256', $typedKey)));
+    }
+
+    // ------------------------------------------------------------------
+    // Création du compte admin Acronis (catégorie b — CDC 4.4/4.4 bis)
+    // ------------------------------------------------------------------
+
+    /**
+     * Crée un compte Accounts pour ce provider ("Admin compte client Acronis"),
+     * pré-rempli depuis les "Valeurs par défaut Accounts" (4.4 bis), chiffré via
+     * la vraie API Accounts (AccountCrypto), puis lié au provider (Account_Item).
+     *
+     * @return int L'ID du compte Accounts créé.
+     * @throws \RuntimeException si le plugin Accounts est absent, si aucune
+     *         empreinte n'est configurée/résolue, ou si la création échoue.
+     */
+    public static function createAdminAccount(
+        Provider $provider,
+        string $login,
+        string $password,
+        ?string $typedKey = null
+    ): int {
+        if (!self::isAvailable()) {
+            throw new \RuntimeException(__('Le plugin Accounts n\'est pas disponible.', 'backupgestion'));
+        }
+
+        $hashId = (int)($provider->fields['accounts_hash_id'] ?? 0);
+        if ($hashId <= 0) {
+            throw new \RuntimeException(__('Aucune empreinte configurée dans les "Valeurs par défaut Accounts" de ce provider.', 'backupgestion'));
+        }
+
+        $timeout     = 15;
+        $fingerprint = self::resolveFingerprint($hashId, $typedKey, $timeout);
+        if ($fingerprint === null) {
+            throw new \RuntimeException(__('Clé de chiffrement invalide ou absente — veuillez la saisir.', 'backupgestion'));
+        }
+
+        if (trim($login) === '' || $password === '') {
+            throw new \RuntimeException(__('Identifiant et mot de passe requis.', 'backupgestion'));
+        }
+
+        $input = [
+            'name'                             => sprintf(__('[Sauvegarde] Admin %s', 'backupgestion'), $provider->fields['name'] ?? ''),
+            'login'                            => $login,
+            'encrypted_password'               => addslashes(\GlpiPlugin\Accounts\AccountCrypto::encrypt($password, $fingerprint)),
+            'plugin_accounts_hashes_id'        => $hashId,
+            'plugin_accounts_accounttypes_id'  => (int)($provider->fields['accounts_accounttype_id'] ?? 0),
+            'plugin_accounts_accountstates_id' => (int)($provider->fields['accounts_accountstates_id'] ?? 0),
+            'entities_id'                      => (int)($provider->fields['entities_id'] ?? 0),
+            'is_recursive'                     => (int)($provider->fields['is_recursive'] ?? 0),
+            'users_id'                         => (int)($provider->fields['accounts_users_id'] ?? 0),
+            'users_id_tech'                    => (int)($provider->fields['accounts_users_id_tech'] ?? 0),
+            'groups_id'                        => (int)($provider->fields['accounts_groups_id'] ?? 0),
+            'groups_id_tech'                   => (int)($provider->fields['accounts_groups_id_tech'] ?? 0),
+            'is_helpdesk_visible'              => (int)($provider->fields['accounts_is_helpdesk_visible'] ?? 0),
+            'date_creation'                    => date('Y-m-d H:i:s'),
+            'comment'                          => sprintf(__('Créé automatiquement par BackupGestion pour le provider "%s" le %s.', 'backupgestion'), $provider->fields['name'] ?? '', date('Y-m-d H:i')),
+        ];
+
+        $account = new \GlpiPlugin\Accounts\Account();
+        $newID   = $account->add($input);
+        if (!$newID) {
+            throw new \RuntimeException(__('La création du compte dans Accounts a échoué.', 'backupgestion'));
+        }
+
+        self::linkToItem((int)$newID, Provider::class, (int)$provider->fields['id']);
+
+        return (int)$newID;
     }
 
     // ------------------------------------------------------------------
     // Association Account_Item (aucune donnée sensible — simple ligne de liaison)
     // ------------------------------------------------------------------
 
-    /**
-     * Relie un compte Accounts déjà créé (catégorie b) à un item GLPI (typiquement
-     * ce Provider) via le mécanisme d'association standard d'Accounts.
-     */
     public static function linkToItem(int $accountId, string $itemtype, int $itemsId): bool
     {
         if (!self::isAvailable() || !class_exists('\GlpiPlugin\Accounts\Account_Item')) {
@@ -136,7 +262,7 @@ class AccountsVault
             throw new \RuntimeException(__('Compte Accounts introuvable.', 'backupgestion'));
         }
 
-        $link = new \GlpiPlugin\Accounts\Account_Item();
+        $link  = new \GlpiPlugin\Accounts\Account_Item();
         $newID = $link->add([
             'plugin_accounts_accounts_id' => $accountId,
             'itemtype'                    => $itemtype,
@@ -150,12 +276,6 @@ class AccountsVault
     // Provisionnement à l'installation (best-effort — CDC 4.4)
     // ------------------------------------------------------------------
 
-    /**
-     * Crée le type de compte Accounts dédié à "Admin compte client Acronis" s'il
-     * n'existe pas déjà (comparaison par nom). Best-effort : toute erreur ici ne
-     * doit jamais empêcher l'installation/activation de BackupGestion — appelée
-     * depuis hook.php dans un try/catch.
-     */
     public static function provisionDefaultAccountType(): void
     {
         global $DB;
@@ -181,12 +301,6 @@ class AccountsVault
         }
         if ($DB->fieldExists($table, 'is_recursive')) {
             $insert['is_recursive'] = 1;
-        }
-        if ($DB->fieldExists($table, 'date_creation')) {
-            $insert['date_creation'] = date('Y-m-d H:i:s');
-        }
-        if ($DB->fieldExists($table, 'date_mod')) {
-            $insert['date_mod'] = date('Y-m-d H:i:s');
         }
 
         $DB->insert($table, $insert);
