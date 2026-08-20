@@ -1,0 +1,89 @@
+{% import "components/form/fields_macros.html.twig" as fields %}
+{% import "components/form/basic_inputs_macros.html.twig" as inputs %}
+
+{% if not accountsAvailable %}
+    <div class="alert alert-warning">
+        <i class="ti ti-alert-triangle me-2"></i>
+        {{ __('Plugin Accounts non détecté — cette zone ne concerne que les secrets de catégorie (b) (ex. compte admin du tenant Acronis) et est indépendante des identifiants API.', 'backupgestion') }}
+    </div>
+{% else %}
+    <form method="post" action="{{ webdir }}/front/provider.form.php">
+        {{ inputs.hidden('_glpi_csrf_token', csrf_token()) }}
+        {{ inputs.hidden('id', item.fields['id']) }}
+
+        <div class="alert alert-info">
+            <i class="ti ti-info-circle me-2"></i>
+            {{ __('Le compte admin est le compte humain qui donne accès à la console Cloud du client (distinct des identifiants API, utilisés uniquement par le plugin). Ces champs pré-remplissent la fiche du compte au moment de sa création, dans la section "Créer un compte utilisateur" de la fiche principale.', 'backupgestion') }}
+        </div>
+
+        {% if accountsHashes|length == 0 %}
+            <div class="alert alert-warning">
+                <i class="ti ti-alert-triangle me-2"></i>
+                {{ __('Aucune empreinte Accounts disponible pour cette entité. Créez-en une dans le plugin Accounts (menu Accounts → Empreintes) avant de pouvoir créer un compte.', 'backupgestion') }}
+            </div>
+        {% endif %}
+
+        <div class="mb-3 row">
+            <label class="col-xxl-4 col-form-label">{{ __('Empreinte à utiliser (défaut)', 'backupgestion') }}</label>
+            <div class="col-xxl-8">
+                <select name="accounts_hash_id" class="form-select">
+                    <option value="0">-- {{ __('Aucune / à choisir dans Accounts', 'backupgestion') }} --</option>
+                    {% for id, name in accountsHashes %}
+                        <option value="{{ id }}" {% if item.fields['accounts_hash_id'] == id %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="mb-3 row">
+            <label class="col-xxl-4 col-form-label">{{ __('Type de compte Accounts', 'backupgestion') }}</label>
+            <div class="col-xxl-8">
+                <select name="accounts_accounttype_id" class="form-select">
+                    <option value="0">-- {{ __('Aucun', 'backupgestion') }} --</option>
+                    {% for id, name in accountsTypes %}
+                        <option value="{{ id }}" {% if item.fields['accounts_accounttype_id'] == id %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="mb-3 row">
+            <label class="col-xxl-4 col-form-label">{{ __('Statut par défaut', 'backupgestion') }}</label>
+            <div class="col-xxl-8">
+                <select name="accounts_accountstates_id" class="form-select">
+                    <option value="0">-- {{ __('Aucun', 'backupgestion') }} --</option>
+                    {% for id, name in accountsStates %}
+                        <option value="{{ id }}" {% if item.fields['accounts_accountstates_id'] == id %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        {# Mêmes restrictions de droit que les champs natifs d'Accounts (users_id: 'all',
+           users_id_tech: 'interface'). #}
+        {{ fields.dropdownField('User', 'accounts_users_id', item.fields['accounts_users_id'] ?? 0, __('Utilisateur concerné (défaut)', 'backupgestion'), {'display_emptychoice': true, 'right': 'all'}) }}
+        {{ fields.dropdownField('User', 'accounts_users_id_tech', item.fields['accounts_users_id_tech'] ?? 0, __('Technicien responsable (défaut)', 'backupgestion'), {'display_emptychoice': true, 'right': 'interface'}) }}
+        {# Même filtre que le champ "Groupe concerné" natif d'Accounts : uniquement les
+           groupes marqués "groupe de contact" (is_itemgroup). #}
+        {{ fields.dropdownField('Group', 'accounts_groups_id', item.fields['accounts_groups_id'] ?? 0, __('Groupe concerné (défaut)', 'backupgestion'), {'display_emptychoice': true, 'condition': {'is_itemgroup': 1}}) }}
+        {# Même filtre que le champ "Groupe responsable" natif d'Accounts : uniquement
+           les groupes marqués "groupe technicien" (is_assign) — sinon une valeur choisie
+           ici peut ne plus apparaître comme sélectionnable sur la fiche du compte créé. #}
+        {{ fields.dropdownField('Group', 'accounts_groups_id_tech', item.fields['accounts_groups_id_tech'] ?? 0, __('Groupe responsable (défaut)', 'backupgestion'), {'display_emptychoice': true, 'condition': {'is_assign': 1}}) }}
+
+        <div class="mb-3 row">
+            <label class="col-xxl-4 col-form-label">{{ __('Associable à un ticket', 'backupgestion') }}</label>
+            <div class="col-xxl-8">
+                <input type="hidden" name="accounts_is_helpdesk_visible" value="0" />
+                <input type="checkbox" name="accounts_is_helpdesk_visible" value="1" class="form-check-input"
+                       {% if item.fields['accounts_is_helpdesk_visible'] %}checked{% endif %} />
+            </div>
+        </div>
+
+        <div class="col-12 mb-3">
+            <button type="submit" name="update" value="1" class="btn btn-primary">
+                <i class="ti ti-device-floppy me-1"></i>{{ __('Enregistrer', 'backupgestion') }}
+            </button>
+        </div>
+    </form>
+{% endif %}

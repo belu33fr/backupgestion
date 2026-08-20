@@ -331,6 +331,8 @@ class Provider extends CommonDBTM
 
     public function showForm($ID, array $options = []): bool
     {
+        global $DB;
+
         $this->initForm($ID, $options);
 
         $hasCredentials  = [];
@@ -341,7 +343,6 @@ class Provider extends CommonDBTM
         $neverPrefilled  = ['client_secret'];
 
         if ($this->fields['id'] ?? 0) {
-            global $DB;
             foreach ($DB->request([
                 'FROM'   => Credential::getTable(),
                 'WHERE'  => ['providers_id' => $this->fields['id']],
@@ -378,25 +379,27 @@ class Provider extends CommonDBTM
                     'entities_id'                        => $visibleEntities,
                 ],
             ]) as $row) {
-                $children[] = $row;
+                // Nom complet de l'entité (pas juste son index — retour de Luc), via le
+                // helper standard GLPI (confirmé utilisé par Accounts lui-même).
+                $row['entity_name'] = \Dropdown::getDropdownName('glpi_entities', (int)$row['entities_id']);
+                $children[]         = $row;
             }
         }
 
-        $entitiesId        = (int)($this->fields['entities_id'] ?? 0);
+        // Liste plate de toutes les entités (id => nom complet), pour le sélecteur de
+        // déplacement rapide sur les sous-tenants (retour de Luc — éviter le transfert
+        // d'entité complet juste pour rattacher un tenant enfant).
+        $allEntities = [];
+        foreach ($DB->request(['FROM' => 'glpi_entities', 'SELECT' => ['id', 'completename'], 'ORDER' => 'completename ASC']) as $row) {
+            $allEntities[(int)$row['id']] = $row['completename'];
+        }
+
         // Zone "bonus" — ne doit jamais empêcher l'affichage de la fiche : toute erreur
         // inattendue ici (ex. plugin Accounts présent mais incompatible) est absorbée,
         // la fiche s'affiche alors comme si Accounts était indisponible.
         $accountsAvailable = false;
-        $accountsHashes    = [];
-        $accountsTypes     = [];
-        $accountsStates    = [];
         try {
             $accountsAvailable = AccountsVault::isAvailable();
-            if ($accountsAvailable) {
-                $accountsHashes = AccountsVault::listHashes($entitiesId);
-                $accountsTypes  = AccountsVault::listAccountTypes($entitiesId);
-                $accountsStates = AccountsVault::listAccountStates($entitiesId);
-            }
         } catch (\Throwable $e) {
             $accountsAvailable = false;
         }
@@ -411,11 +414,9 @@ class Provider extends CommonDBTM
                 'hasCredentials'       => $hasCredentials,
                 'prefillValues'        => $prefillValues,
                 'children'             => $children,
+                'allEntities'          => $allEntities,
                 'webdir'               => Plugin::getWebDir('backupgestion'),
                 'accountsAvailable'    => $accountsAvailable,
-                'accountsHashes'       => $accountsHashes,
-                'accountsTypes'        => $accountsTypes,
-                'accountsStates'       => $accountsStates,
                 'accountsHashId'       => (int)($this->fields['accounts_hash_id'] ?? 0),
             ]
         );

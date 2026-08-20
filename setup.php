@@ -10,6 +10,7 @@ define('PLUGIN_BACKUPGESTION_MAX_GLPI', '12.0.0');
 
 use Glpi\Plugin\Hooks;
 use GlpiPlugin\Backupgestion\Provider;
+use GlpiPlugin\Backupgestion\ProviderAccountsDefaults;
 use GlpiPlugin\Backupgestion\Right;
 
 function plugin_init_backupgestion(): void
@@ -37,6 +38,10 @@ function plugin_init_backupgestion(): void
 
     // Onglet "Sauvegardes" dans les profils (matrice des 5 droits, 4.6)
     Plugin::registerClass(Right::class, ['addtabon' => 'Profile']);
+
+    // Onglet "Valeurs par défaut" (Accounts) sur la fiche provider, séparé de la
+    // fiche principale pour la clarté de l'interface (retour de Luc).
+    Plugin::registerClass(ProviderAccountsDefaults::class, ['addtabon' => Provider::class]);
 
     // Initialiser les droits dans la session courante
     Right::initProfile();

@@ -237,24 +237,41 @@ class AccountsVault
     // Création d'un compte utilisateur Acronis (catégorie b — CDC 4.4/4.4 bis)
     // ------------------------------------------------------------------
 
-    /** Nom du type de compte Accounts dédié, provisionné à l'installation (best-effort). */
-    private const ADMIN_ACCOUNTTYPE_NAME = 'BackupGestion — Admin compte client Acronis';
+    /** Noms des types de compte Accounts dédiés, provisionnés à l'installation (best-effort). */
+    private const ADMIN_ACCOUNTTYPE_NAME    = 'BackupGestion — Admin compte client Acronis';
+    private const CRYPTKEY_ACCOUNTTYPE_NAME = 'BackupGestion — Clé de chiffrement sauvegarde';
 
     /**
-     * Résout l'ID du type de compte Accounts dédié à BackupGestion (auto-provisionné à
-     * l'installation par provisionDefaultAccountType()) — utilisé quand la case
-     * "Administrateur" est cochée, pour distinguer ce compte du type par défaut configuré
-     * sur le provider. Retourne null si introuvable (ex. provisionnement best-effort qui
-     * a échoué) : l'appelant retombe alors sur le type par défaut du provider.
+     * Résout l'ID du type de compte Accounts dédié "Admin" (auto-provisionné à
+     * l'installation) — utilisé quand la case "Administrateur" est cochée, pour
+     * distinguer ce compte du type par défaut configuré sur le provider. Retourne
+     * null si introuvable (ex. provisionnement best-effort qui a échoué) :
+     * l'appelant retombe alors sur le type par défaut du provider.
      */
     public static function getAdminAccountTypeId(): ?int
+    {
+        return self::getProvisionedAccountTypeId(self::ADMIN_ACCOUNTTYPE_NAME);
+    }
+
+    /**
+     * Résout l'ID du type de compte Accounts dédié "Clé de chiffrement sauvegarde"
+     * (auto-provisionné à l'installation) — utilisé quand la case "Clé de cryptage"
+     * est cochée (ex. passphrase de chiffrement d'un plan de sauvegarde Acronis, à
+     * documenter pour la restauration — distinct de l'empreinte Accounts elle-même).
+     */
+    public static function getCryptkeyAccountTypeId(): ?int
+    {
+        return self::getProvisionedAccountTypeId(self::CRYPTKEY_ACCOUNTTYPE_NAME);
+    }
+
+    private static function getProvisionedAccountTypeId(string $name): ?int
     {
         global $DB;
         $table = 'glpi_plugin_accounts_accounttypes';
         if (!self::isAvailable() || !$DB->tableExists($table)) {
             return null;
         }
-        $row = $DB->request(['FROM' => $table, 'WHERE' => ['name' => __(self::ADMIN_ACCOUNTTYPE_NAME, 'backupgestion')]])->current();
+        $row = $DB->request(['FROM' => $table, 'WHERE' => ['name' => __($name, 'backupgestion')]])->current();
         return $row ? (int)$row['id'] : null;
     }
 
@@ -263,10 +280,12 @@ class AccountsVault
      * défaut Accounts" (4.4 bis), chiffré via la vraie API Accounts (AccountCrypto),
      * puis lié au provider (Account_Item).
      *
-     * @param bool $isAdmin Si vrai, force le type de compte sur "BackupGestion — Admin
+     * @param bool $isAdmin    Si vrai, force le type de compte sur "BackupGestion — Admin
      *        compte client Acronis" (auto-provisionné) au lieu du type par défaut
-     *        configuré sur le provider — pour distinguer un compte administrateur d'un
-     *        simple compte utilisateur.
+     *        configuré sur le provider.
+     * @param bool $isCryptkey Si vrai, force le type de compte sur "BackupGestion — Clé de
+     *        chiffrement sauvegarde" (auto-provisionné). Mutuellement exclusif avec
+     *        $isAdmin côté interface ; si les deux sont vrais ici, $isAdmin est prioritaire.
      * @return int L'ID du compte Accounts créé.
      * @throws \RuntimeException si le plugin Accounts est absent, si aucune
      *         empreinte n'est configurée/résolue, ou si la création échoue.
@@ -276,7 +295,8 @@ class AccountsVault
         string $login,
         string $password,
         ?string $typedKey = null,
-        bool $isAdmin = false
+        bool $isAdmin = false,
+        bool $isCryptkey = false
     ): int {
         if (!self::isAvailable()) {
             throw new \RuntimeException(__('Le plugin Accounts n\'est pas disponible.', 'backupgestion'));
@@ -293,16 +313,31 @@ class AccountsVault
             throw new \RuntimeException(__('Clé de chiffrement invalide ou absente — veuillez la saisir.', 'backupgestion'));
         }
 
-        if (trim($login) === '' || $password === '') {
-            throw new \RuntimeException(__('Identifiant et mot de passe requis.', 'backupgestion'));
+        $login = trim($login);
+        if ($password === '') {
+            throw new \RuntimeException(__('Mot de passe requis.', 'backupgestion'));
+        }
+        if (!$isCryptkey) {
+            // Une "Clé de cryptage" (passphrase, pas de notion d'identifiant) peut être
+            // créée sans login ; tout autre compte (utilisateur/admin) doit en avoir un,
+            // unique parmi les comptes déjà liés à ce provider (retour de Luc).
+            if ($login === '') {
+                throw new \RuntimeException(__('Identifiant requis.', 'backupgestion'));
+            }
+            if (self::loginExistsForProvider((int)$provider->fields['id'], $login)) {
+                throw new \RuntimeException(__('Un compte avec cet identifiant existe déjà pour ce provider.', 'backupgestion'));
+            }
         }
 
         $accounttypeId = (int)($provider->fields['accounts_accounttype_id'] ?? 0);
+        $namePrefix    = __('[Sauvegarde] Utilisateur %s', 'backupgestion');
         if ($isAdmin) {
             $accounttypeId = self::getAdminAccountTypeId() ?? $accounttypeId;
+            $namePrefix    = __('[Sauvegarde] Admin %s', 'backupgestion');
+        } elseif ($isCryptkey) {
+            $accounttypeId = self::getCryptkeyAccountTypeId() ?? $accounttypeId;
+            $namePrefix    = __('[Sauvegarde] Clé de chiffrement %s', 'backupgestion');
         }
-
-        $namePrefix = $isAdmin ? __('[Sauvegarde] Admin %s', 'backupgestion') : __('[Sauvegarde] Utilisateur %s', 'backupgestion');
 
         $input = [
             'name'                             => sprintf($namePrefix, $provider->fields['name'] ?? ''),
@@ -331,6 +366,47 @@ class AccountsVault
         self::linkToItem((int)$newID, Provider::class, (int)$provider->fields['id']);
 
         return (int)$newID;
+    }
+
+    /**
+     * Vérifie si un compte avec ce login existe déjà parmi ceux liés (Account_Item) à
+     * ce provider — comparaison insensible à la casse, comme les identifiants usuels.
+     */
+    private static function loginExistsForProvider(int $providerId, string $login): bool
+    {
+        global $DB;
+
+        if (!self::isAvailable() || $providerId <= 0 || $login === '') {
+            return false;
+        }
+
+        $wantedLogin = strtolower($login);
+        $rows = $DB->request([
+            'SELECT'     => ['glpi_plugin_accounts_accounts.login'],
+            'FROM'       => 'glpi_plugin_accounts_accounts_items',
+            'INNER JOIN' => [
+                'glpi_plugin_accounts_accounts' => [
+                    'ON' => [
+                        'glpi_plugin_accounts_accounts_items' => 'plugin_accounts_accounts_id',
+                        'glpi_plugin_accounts_accounts'       => 'id',
+                    ],
+                ],
+            ],
+            'WHERE' => [
+                'glpi_plugin_accounts_accounts_items.itemtype' => Provider::class,
+                'glpi_plugin_accounts_accounts_items.items_id' => $providerId,
+            ],
+        ]);
+
+        // Comparaison insensible à la casse faite en PHP plutôt qu'en SQL (LOWER()) —
+        // évite toute incertitude sur la syntaxe exacte acceptée par le générateur de
+        // requêtes GLPI pour une expression SQL brute en clé de WHERE.
+        foreach ($rows as $row) {
+            if (strtolower((string)($row['login'] ?? '')) === $wantedLogin) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ------------------------------------------------------------------
@@ -364,6 +440,13 @@ class AccountsVault
 
     public static function provisionDefaultAccountType(): void
     {
+        foreach ([self::ADMIN_ACCOUNTTYPE_NAME, self::CRYPTKEY_ACCOUNTTYPE_NAME] as $name) {
+            self::provisionAccountTypeByName($name);
+        }
+    }
+
+    private static function provisionAccountTypeByName(string $name): void
+    {
         global $DB;
 
         $table = 'glpi_plugin_accounts_accounttypes';
@@ -371,14 +454,14 @@ class AccountsVault
             return;
         }
 
-        $name = __('BackupGestion — Admin compte client Acronis', 'backupgestion');
+        $localizedName = __($name, 'backupgestion');
 
-        $existing = $DB->request(['FROM' => $table, 'WHERE' => ['name' => $name]])->current();
+        $existing = $DB->request(['FROM' => $table, 'WHERE' => ['name' => $localizedName]])->current();
         if ($existing) {
             return;
         }
 
-        $insert = ['name' => $name];
+        $insert = ['name' => $localizedName];
         if ($DB->fieldExists($table, 'comment')) {
             $insert['comment'] = __('Créé automatiquement par le plugin BackupGestion — CDC 4.4.', 'backupgestion');
         }

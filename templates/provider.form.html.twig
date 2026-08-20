@@ -130,216 +130,230 @@
         </div>
     {% endif %}
 
-    {{ fields.smallTitle(__('Compte admin Acronis (stocké dans Accounts, distinct des identifiants API ci-dessus)', 'backupgestion')) }}
+    {# Les "Valeurs par défaut" (empreinte, type, statut, utilisateur/groupe...) sont
+       désormais dans leur propre onglet "Valeurs par défaut" (clarté de l'interface,
+       retour de Luc) — voir ProviderAccountsDefaults. #}
 
-    {% if not accountsAvailable %}
-        <div class="alert alert-warning">
-            <i class="ti ti-alert-triangle me-2"></i>
-            {{ __('Plugin Accounts non détecté — cette zone ne concerne que les secrets de catégorie (b) (ex. compte admin du tenant Acronis) et est indépendante des identifiants API ci-dessus.', 'backupgestion') }}
-        </div>
-    {% else %}
+    {% if accountsAvailable and item.fields['id'] %}
+        {{ fields.smallTitle(__('Créer un compte utilisateur', 'backupgestion')) }}
+
         <div class="alert alert-info">
             <i class="ti ti-info-circle me-2"></i>
-            {{ __('Le compte admin est le compte humain qui donne accès à la console Cloud du client (distinct des identifiants API ci-dessus, utilisés uniquement par le plugin). Les champs ci-dessous ("Valeurs par défaut") pré-remplissent sa fiche au moment de sa création, plus bas sur cette page.', 'backupgestion') }}
-        </div>
-
-        {% if accountsHashes|length == 0 %}
-            <div class="alert alert-warning">
-                <i class="ti ti-alert-triangle me-2"></i>
-                {{ __('Aucune empreinte Accounts disponible pour cette entité. Créez-en une dans le plugin Accounts (menu Accounts → Empreintes) avant de pouvoir créer le compte admin ici.', 'backupgestion') }}
-            </div>
-        {% endif %}
-
-        <div class="mb-3 row">
-            <label class="col-xxl-4 col-form-label">{{ __('Empreinte à utiliser (défaut)', 'backupgestion') }}</label>
-            <div class="col-xxl-8">
-                <select name="accounts_hash_id" class="form-select">
-                    <option value="0">-- {{ __('Aucune / à choisir dans Accounts', 'backupgestion') }} --</option>
-                    {% for id, name in accountsHashes %}
-                        <option value="{{ id }}" {% if item.fields['accounts_hash_id'] == id %}selected{% endif %}>{{ name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+            {{ __('Création de compte utilisateur/admin/clé cryptage avec les valeurs par défaut.', 'backupgestion') }}
         </div>
 
         <div class="mb-3 row">
-            <label class="col-xxl-4 col-form-label">{{ __('Type de compte Accounts', 'backupgestion') }}</label>
+            <label class="col-xxl-4 col-form-label">{{ __('Identifiant', 'backupgestion') }}</label>
             <div class="col-xxl-8">
-                <select name="accounts_accounttype_id" class="form-select">
-                    <option value="0">-- {{ __('Aucun', 'backupgestion') }} --</option>
-                    {% for id, name in accountsTypes %}
-                        <option value="{{ id }}" {% if item.fields['accounts_accounttype_id'] == id %}selected{% endif %}>{{ name }}</option>
-                    {% endfor %}
-                </select>
+                <input type="text" id="bg-accounts-login" class="form-control" autocomplete="off" />
             </div>
         </div>
-
         <div class="mb-3 row">
-            <label class="col-xxl-4 col-form-label">{{ __('Statut par défaut', 'backupgestion') }}</label>
+            <label class="col-xxl-4 col-form-label">{{ __('Mot de passe', 'backupgestion') }}</label>
             <div class="col-xxl-8">
-                <select name="accounts_accountstates_id" class="form-select">
-                    <option value="0">-- {{ __('Aucun', 'backupgestion') }} --</option>
-                    {% for id, name in accountsStates %}
-                        <option value="{{ id }}" {% if item.fields['accounts_accountstates_id'] == id %}selected{% endif %}>{{ name }}</option>
-                    {% endfor %}
-                </select>
+                <input type="password" id="bg-accounts-password" class="form-control"
+                       autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly')"
+                       data-lpignore="true" data-1p-ignore />
             </div>
         </div>
-
-        {# Mêmes restrictions de droit que les champs natifs d'Accounts (users_id: 'all',
-           users_id_tech: 'interface') — pour la même raison que les groupes ci-dessous. #}
-        {{ fields.dropdownField('User', 'accounts_users_id', item.fields['accounts_users_id'] ?? 0, __('Utilisateur concerné (défaut)', 'backupgestion'), {'display_emptychoice': true, 'right': 'all'}) }}
-        {{ fields.dropdownField('User', 'accounts_users_id_tech', item.fields['accounts_users_id_tech'] ?? 0, __('Technicien responsable (défaut)', 'backupgestion'), {'display_emptychoice': true, 'right': 'interface'}) }}
-        {# Même filtre que le champ "Groupe concerné" natif d'Accounts : uniquement les
-           groupes marqués "groupe de contact" (is_itemgroup). #}
-        {{ fields.dropdownField('Group', 'accounts_groups_id', item.fields['accounts_groups_id'] ?? 0, __('Groupe concerné (défaut)', 'backupgestion'), {'display_emptychoice': true, 'condition': {'is_itemgroup': 1}}) }}
-        {# Même filtre que le champ "Groupe responsable" natif d'Accounts
-           (accounts/templates/account.html.twig) : uniquement les groupes marqués
-           "groupe technicien" (is_assign) — sinon une valeur choisie ici peut ne plus
-           apparaître comme sélectionnable sur la fiche du compte créé, et son
-           groupe reste difficile à retirer/effacer proprement (retour de Luc). #}
-        {{ fields.dropdownField('Group', 'accounts_groups_id_tech', item.fields['accounts_groups_id_tech'] ?? 0, __('Groupe responsable (défaut)', 'backupgestion'), {'display_emptychoice': true, 'condition': {'is_assign': 1}}) }}
-
         <div class="mb-3 row">
-            <label class="col-xxl-4 col-form-label">{{ __('Associable à un ticket', 'backupgestion') }}</label>
+            <label class="col-xxl-4 col-form-label">{{ __('Administrateur', 'backupgestion') }}</label>
             <div class="col-xxl-8">
-                <input type="hidden" name="accounts_is_helpdesk_visible" value="0" />
-                <input type="checkbox" name="accounts_is_helpdesk_visible" value="1" class="form-check-input"
-                       {% if item.fields['accounts_is_helpdesk_visible'] %}checked{% endif %} />
+                <input type="checkbox" id="bg-accounts-is-admin" class="form-check-input" />
+                <span class="form-text d-inline">{{ __('Change le type de compte en "BackupGestion — Admin compte client Acronis" au lieu du type par défaut configuré dans l\'onglet "Valeurs par défaut".', 'backupgestion') }}</span>
             </div>
         </div>
+        <div class="mb-3 row">
+            <label class="col-xxl-4 col-form-label">{{ __('Clé de cryptage', 'backupgestion') }}</label>
+            <div class="col-xxl-8">
+                <input type="checkbox" id="bg-accounts-is-cryptkey" class="form-check-input" />
+                <span class="form-text d-inline">{{ __('Change le type de compte en "BackupGestion — Clé de chiffrement sauvegarde" (ex. passphrase d\'un plan de sauvegarde chiffré). Exclusif avec "Administrateur".', 'backupgestion') }}</span>
+            </div>
+        </div>
+        <div class="mb-3 row">
+            <label class="col-xxl-4 col-form-label">{{ __('Empreinte — clé de chiffrement', 'backupgestion') }}</label>
+            <div class="col-xxl-8">
+                <input type="password" id="bg-accounts-key" class="form-control"
+                       autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly')"
+                       data-lpignore="true" data-1p-ignore
+                       placeholder="{{ __('Laisser vide si une clé serveur ou de session est déjà disponible', 'backupgestion') }}" />
+            </div>
+        </div>
+        <div class="col-12 mb-3 d-flex gap-2 flex-wrap align-items-center">
+            <button type="button" id="bg-btn-create-accounts" class="btn btn-primary" data-id="{{ item.fields['id'] }}" data-url="{{ webdir }}/front/provider.form.php">
+                <i class="ti ti-key me-1"></i>{{ __('Créer le compte', 'backupgestion') }}
+            </button>
+            <button type="button" id="bg-btn-forget-key" class="btn btn-outline-secondary" data-id="{{ item.fields['id'] }}" data-hash="{{ accountsHashId }}" data-url="{{ webdir }}/front/provider.form.php">
+                <i class="ti ti-lock-off me-1"></i>{{ __('Oublier la clé', 'backupgestion') }}
+            </button>
+            <span id="bg-accounts-result"></span>
+        </div>
+        <script>
+        (function() {
+            var csrfMeta = document.querySelector("meta[property='glpi:csrf_token']");
+            var csrf = csrfMeta ? csrfMeta.content : '';
 
-        {% if item.fields['id'] %}
-            {{ fields.smallTitle(__('Créer un compte utilisateur', 'backupgestion')) }}
+            function postForm(btn, resultEl, body, onSuccess) {
+                btn.disabled = true;
+                resultEl.innerHTML = "<span class='badge bg-info'>" + {{ __('En cours...', 'backupgestion')|json_encode|raw }} + "</span>";
+                fetch(btn.dataset.url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Glpi-Csrf-Token': csrf, 'X-Requested-With': 'XMLHttpRequest'},
+                    body: new URLSearchParams(body)
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    btn.disabled = false;
+                    if (d.success) {
+                        onSuccess(d, resultEl);
+                    } else {
+                        resultEl.innerHTML = "<span class='badge bg-danger'>" + (d.message || {{ __('Échec', 'backupgestion')|json_encode|raw }}) + "</span>";
+                    }
+                })
+                .catch(function() {
+                    btn.disabled = false;
+                    resultEl.innerHTML = "<span class='badge bg-danger'>" + {{ __('Erreur réseau', 'backupgestion')|json_encode|raw }} + "</span>";
+                });
+            }
 
-            <div class="alert alert-info">
-                <i class="ti ti-info-circle me-2"></i>
-                {{ __('Ce formulaire crée un nouveau compte à chaque utilisation — il ne montre pas les comptes déjà créés. Retrouvez la liste des comptes liés à ce provider dans l\'onglet "Comptes associés" (Accounts) de cette fiche, une fois enregistrée.', 'backupgestion') }}
-            </div>
+            var isAdminBox    = document.getElementById('bg-accounts-is-admin');
+            var isCryptkeyBox = document.getElementById('bg-accounts-is-cryptkey');
+            if (isAdminBox && isCryptkeyBox) {
+                isAdminBox.addEventListener('change', function() {
+                    if (isAdminBox.checked) { isCryptkeyBox.checked = false; }
+                });
+                isCryptkeyBox.addEventListener('change', function() {
+                    if (isCryptkeyBox.checked) { isAdminBox.checked = false; }
+                });
+            }
 
-            <div class="mb-3 row">
-                <label class="col-xxl-4 col-form-label">{{ __('Identifiant', 'backupgestion') }}</label>
-                <div class="col-xxl-8">
-                    <input type="text" id="bg-accounts-login" class="form-control" autocomplete="off" />
-                </div>
-            </div>
-            <div class="mb-3 row">
-                <label class="col-xxl-4 col-form-label">{{ __('Mot de passe', 'backupgestion') }}</label>
-                <div class="col-xxl-8">
-                    <input type="password" id="bg-accounts-password" class="form-control"
-                           autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly')"
-                           data-lpignore="true" data-1p-ignore />
-                </div>
-            </div>
-            <div class="mb-3 row">
-                <label class="col-xxl-4 col-form-label">{{ __('Administrateur', 'backupgestion') }}</label>
-                <div class="col-xxl-8">
-                    <input type="checkbox" id="bg-accounts-is-admin" class="form-check-input" />
-                    <span class="form-text d-inline">{{ __('Change le type de compte en "BackupGestion — Admin compte client Acronis" au lieu du type par défaut configuré ci-dessus.', 'backupgestion') }}</span>
-                </div>
-            </div>
-            <div class="mb-3 row">
-                <label class="col-xxl-4 col-form-label">{{ __('Clé de chiffrement (empreinte)', 'backupgestion') }}</label>
-                <div class="col-xxl-8">
-                    <input type="password" id="bg-accounts-key" class="form-control"
-                           autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly')"
-                           data-lpignore="true" data-1p-ignore
-                           placeholder="{{ __('Laisser vide si une clé serveur ou de session est déjà disponible', 'backupgestion') }}" />
-                </div>
-            </div>
-            <div class="col-12 mb-3 d-flex gap-2 flex-wrap align-items-center">
-                <button type="button" id="bg-btn-create-accounts" class="btn btn-primary" data-id="{{ item.fields['id'] }}" data-url="{{ webdir }}/front/provider.form.php">
-                    <i class="ti ti-key me-1"></i>{{ __('Créer le compte', 'backupgestion') }}
-                </button>
-                <button type="button" id="bg-btn-forget-key" class="btn btn-outline-secondary" data-id="{{ item.fields['id'] }}" data-hash="{{ accountsHashId }}" data-url="{{ webdir }}/front/provider.form.php">
-                    <i class="ti ti-lock-off me-1"></i>{{ __('Oublier la clé', 'backupgestion') }}
-                </button>
-                <span id="bg-accounts-result"></span>
-            </div>
-            <script>
-            (function() {
-                var csrfMeta = document.querySelector("meta[property='glpi:csrf_token']");
-                var csrf = csrfMeta ? csrfMeta.content : '';
-
-                function postForm(btn, resultEl, body, onSuccess) {
-                    btn.disabled = true;
-                    resultEl.innerHTML = "<span class='badge bg-info'>" + {{ __('En cours...', 'backupgestion')|json_encode|raw }} + "</span>";
-                    fetch(btn.dataset.url, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Glpi-Csrf-Token': csrf, 'X-Requested-With': 'XMLHttpRequest'},
-                        body: new URLSearchParams(body)
-                    })
-                    .then(function(r) { return r.json(); })
-                    .then(function(d) {
-                        btn.disabled = false;
-                        if (d.success) {
-                            onSuccess(d, resultEl);
-                        } else {
-                            resultEl.innerHTML = "<span class='badge bg-danger'>" + (d.message || {{ __('Échec', 'backupgestion')|json_encode|raw }}) + "</span>";
-                        }
-                    })
-                    .catch(function() {
-                        btn.disabled = false;
-                        resultEl.innerHTML = "<span class='badge bg-danger'>" + {{ __('Erreur réseau', 'backupgestion')|json_encode|raw }} + "</span>";
+            var createBtn = document.getElementById('bg-btn-create-accounts');
+            if (createBtn) {
+                createBtn.addEventListener('click', function() {
+                    var resultEl = document.getElementById('bg-accounts-result');
+                    postForm(createBtn, resultEl, {
+                        create_accounts_admin: '1',
+                        id: createBtn.dataset.id,
+                        accounts_login: document.getElementById('bg-accounts-login').value,
+                        accounts_password: document.getElementById('bg-accounts-password').value,
+                        accounts_is_admin: isAdminBox.checked ? '1' : '',
+                        accounts_is_cryptkey: isCryptkeyBox.checked ? '1' : '',
+                        accounts_key: document.getElementById('bg-accounts-key').value
+                    }, function(d, el) {
+                        el.innerHTML = "<span class='badge bg-success'>" + {{ __('Compte créé et lié', 'backupgestion')|json_encode|raw }} + " (#" + d.accounts_id + ")</span>";
+                        document.getElementById('bg-accounts-password').value = '';
+                        isAdminBox.checked = false;
+                        isCryptkeyBox.checked = false;
+                        document.getElementById('bg-accounts-key').value = '';
                     });
-                }
+                });
+            }
 
-                var createBtn = document.getElementById('bg-btn-create-accounts');
-                if (createBtn) {
-                    createBtn.addEventListener('click', function() {
-                        var resultEl = document.getElementById('bg-accounts-result');
-                        postForm(createBtn, resultEl, {
-                            create_accounts_admin: '1',
-                            id: createBtn.dataset.id,
-                            accounts_login: document.getElementById('bg-accounts-login').value,
-                            accounts_password: document.getElementById('bg-accounts-password').value,
-                            accounts_is_admin: document.getElementById('bg-accounts-is-admin').checked ? '1' : '',
-                            accounts_key: document.getElementById('bg-accounts-key').value
-                        }, function(d, el) {
-                            el.innerHTML = "<span class='badge bg-success'>" + {{ __('Compte créé et lié', 'backupgestion')|json_encode|raw }} + " (#" + d.accounts_id + ")</span>";
-                            document.getElementById('bg-accounts-password').value = '';
-                            document.getElementById('bg-accounts-is-admin').checked = false;
-                            document.getElementById('bg-accounts-key').value = '';
-                        });
+            var forgetBtn = document.getElementById('bg-btn-forget-key');
+            if (forgetBtn) {
+                forgetBtn.addEventListener('click', function() {
+                    var resultEl = document.getElementById('bg-accounts-result');
+                    postForm(forgetBtn, resultEl, {
+                        forget_accounts_key: '1',
+                        id: forgetBtn.dataset.id,
+                        accounts_hash_id: forgetBtn.dataset.hash
+                    }, function(d, el) {
+                        el.innerHTML = "<span class='badge bg-success'>" + {{ __('Clé oubliée', 'backupgestion')|json_encode|raw }} + "</span>";
                     });
-                }
-
-                var forgetBtn = document.getElementById('bg-btn-forget-key');
-                if (forgetBtn) {
-                    forgetBtn.addEventListener('click', function() {
-                        var resultEl = document.getElementById('bg-accounts-result');
-                        postForm(forgetBtn, resultEl, {
-                            forget_accounts_key: '1',
-                            id: forgetBtn.dataset.id,
-                            accounts_hash_id: forgetBtn.dataset.hash
-                        }, function(d, el) {
-                            el.innerHTML = "<span class='badge bg-success'>" + {{ __('Clé oubliée', 'backupgestion')|json_encode|raw }} + "</span>";
-                        });
-                    });
-                }
-            })();
-            </script>
-        {% else %}
-            <div class="alert alert-info mt-2">
-                <i class="ti ti-info-circle me-2"></i>
-                {{ __('La création du compte admin sera possible après la première sauvegarde de la fiche.', 'backupgestion') }}
-            </div>
-        {% endif %}
+                });
+            }
+        })();
+        </script>
+    {% elseif accountsAvailable %}
+        <div class="alert alert-info mt-2">
+            <i class="ti ti-info-circle me-2"></i>
+            {{ __('La création du compte admin sera possible après la première sauvegarde de la fiche.', 'backupgestion') }}
+        </div>
     {% endif %}
 
     {% if children|length %}
         {{ fields.smallTitle(__('Sous-tenants rattachés', 'backupgestion')) }}
         <table class="table table-sm">
-            <thead><tr><th>{{ __('Nom') }}</th><th>{{ __('Entité') }}</th></tr></thead>
+            <thead><tr><th>{{ __('Nom') }}</th><th>{{ __('Entité') }}</th><th></th></tr></thead>
             <tbody>
             {% for child in children %}
                 <tr>
                     <td><a href="{{ webdir }}/front/provider.form.php?id={{ child.id }}">{{ child.name }}</a></td>
-                    <td>{{ child.entities_id }}</td>
+                    <td>{{ child.entity_name }}</td>
+                    <td class="d-flex gap-2 align-items-center">
+                        <select class="form-select form-select-sm bg-quickmove-entity" data-child-id="{{ child.id }}" style="width: auto;">
+                            {% for eid, ename in allEntities %}
+                                <option value="{{ eid }}" {% if child.entities_id == eid %}selected{% endif %}>{{ ename }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="button" class="btn btn-sm btn-outline-secondary bg-btn-quickmove" data-child-id="{{ child.id }}" data-url="{{ webdir }}/front/provider.form.php">
+                            {{ __('Déplacer', 'backupgestion') }}
+                        </button>
+                        <span class="bg-quickmove-result" data-child-id="{{ child.id }}"></span>
+                    </td>
                 </tr>
             {% endfor %}
             </tbody>
         </table>
+        <script>
+        (function() {
+            var csrfMeta = document.querySelector("meta[property='glpi:csrf_token']");
+            var csrf = csrfMeta ? csrfMeta.content : '';
+
+            function doMove(btn, childId, extra) {
+                var select   = document.querySelector('.bg-quickmove-entity[data-child-id="' + childId + '"]');
+                var resultEl = document.querySelector('.bg-quickmove-result[data-child-id="' + childId + '"]');
+                var body = Object.assign({quick_move_entity: '1', id: childId, entities_id: select.value}, extra || {});
+                btn.disabled = true;
+                resultEl.innerHTML = "<span class='badge bg-info'>" + {{ __('En cours...', 'backupgestion')|json_encode|raw }} + "</span>";
+                fetch(btn.dataset.url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Glpi-Csrf-Token': csrf, 'X-Requested-With': 'XMLHttpRequest'},
+                    body: new URLSearchParams(body)
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    btn.disabled = false;
+                    if (d.success) {
+                        resultEl.innerHTML = "<span class='badge bg-success'>" + {{ __('Déplacé', 'backupgestion')|json_encode|raw }} + "</span>";
+                        setTimeout(function() { window.location.reload(); }, 1000);
+                    } else if (d.needs_hash_selection) {
+                        // Cas 2 (retour de Luc) : l'empreinte actuelle du provider n'est pas
+                        // valide dans la destination — demande d'en choisir une autre + sa clé
+                        // avant de confirmer le déplacement.
+                        var opts = '<option value="0">-- {{ __('Choisir une empreinte', 'backupgestion') }} --</option>';
+                        Object.keys(d.hashes || {}).forEach(function(hid) {
+                            opts += '<option value="' + hid + '">' + d.hashes[hid] + '</option>';
+                        });
+                        resultEl.innerHTML =
+                            "<div class='alert alert-warning p-2 mb-1'>" + (d.message || '') + "</div>" +
+                            "<select class='form-select form-select-sm mb-1 bg-quickmove-newhash'>" + opts + "</select>" +
+                            "<input type='password' class='form-control form-control-sm mb-1 bg-quickmove-newkey' placeholder='" +
+                            {{ __('Clé de l\'empreinte', 'backupgestion')|json_encode|raw }} + "' autocomplete='new-password' />" +
+                            "<button type='button' class='btn btn-sm btn-primary bg-btn-quickmove-confirm'>" +
+                            {{ __('Confirmer le déplacement', 'backupgestion')|json_encode|raw }} + "</button>";
+                        resultEl.querySelector('.bg-btn-quickmove-confirm').addEventListener('click', function() {
+                            var newHashId = resultEl.querySelector('.bg-quickmove-newhash').value;
+                            var newKey    = resultEl.querySelector('.bg-quickmove-newkey').value;
+                            doMove(btn, childId, {accounts_hash_id: newHashId, accounts_key: newKey});
+                        });
+                    } else {
+                        resultEl.innerHTML = "<span class='badge bg-danger'>" + (d.message || {{ __('Échec', 'backupgestion')|json_encode|raw }}) + "</span>";
+                    }
+                })
+                .catch(function() {
+                    btn.disabled = false;
+                    resultEl.innerHTML = "<span class='badge bg-danger'>" + {{ __('Erreur réseau', 'backupgestion')|json_encode|raw }} + "</span>";
+                });
+            }
+
+            document.querySelectorAll('.bg-btn-quickmove').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    doMove(btn, btn.dataset.childId, {});
+                });
+            });
+        })();
+        </script>
     {% endif %}
 
 {% endblock more_fields %}
