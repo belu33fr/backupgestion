@@ -237,55 +237,28 @@ class AccountsVault
     // Création d'un compte utilisateur Acronis (catégorie b — CDC 4.4/4.4 bis)
     // ------------------------------------------------------------------
 
-    /** Noms des types de compte Accounts dédiés, provisionnés à l'installation (best-effort). */
+    /** Noms des types de compte Accounts créés à titre de suggestion à l'installation
+     *  (best-effort) — l'admin doit ensuite les sélectionner explicitement dans les
+     *  "Valeurs par défaut" du provider (accounts_accounttype_admin_id /
+     *  accounts_accounttype_cryptkey_id) : plus de résolution par nom à l'exécution,
+     *  qui dépendait du bon déroulement du provisionnement (source d'un bug — retour
+     *  de Luc : un compte "Clé de cryptage" créé avec le type "utilisateur" par défaut
+     *  parce que le type dédié n'avait pas encore été trouvé). */
     private const ADMIN_ACCOUNTTYPE_NAME    = 'BackupGestion — Admin compte client Acronis';
     private const CRYPTKEY_ACCOUNTTYPE_NAME = 'BackupGestion — Clé de chiffrement sauvegarde';
-
-    /**
-     * Résout l'ID du type de compte Accounts dédié "Admin" (auto-provisionné à
-     * l'installation) — utilisé quand la case "Administrateur" est cochée, pour
-     * distinguer ce compte du type par défaut configuré sur le provider. Retourne
-     * null si introuvable (ex. provisionnement best-effort qui a échoué) :
-     * l'appelant retombe alors sur le type par défaut du provider.
-     */
-    public static function getAdminAccountTypeId(): ?int
-    {
-        return self::getProvisionedAccountTypeId(self::ADMIN_ACCOUNTTYPE_NAME);
-    }
-
-    /**
-     * Résout l'ID du type de compte Accounts dédié "Clé de chiffrement sauvegarde"
-     * (auto-provisionné à l'installation) — utilisé quand la case "Clé de cryptage"
-     * est cochée (ex. passphrase de chiffrement d'un plan de sauvegarde Acronis, à
-     * documenter pour la restauration — distinct de l'empreinte Accounts elle-même).
-     */
-    public static function getCryptkeyAccountTypeId(): ?int
-    {
-        return self::getProvisionedAccountTypeId(self::CRYPTKEY_ACCOUNTTYPE_NAME);
-    }
-
-    private static function getProvisionedAccountTypeId(string $name): ?int
-    {
-        global $DB;
-        $table = 'glpi_plugin_accounts_accounttypes';
-        if (!self::isAvailable() || !$DB->tableExists($table)) {
-            return null;
-        }
-        $row = $DB->request(['FROM' => $table, 'WHERE' => ['name' => __($name, 'backupgestion')]])->current();
-        return $row ? (int)$row['id'] : null;
-    }
 
     /**
      * Crée un compte Accounts pour ce provider, pré-rempli depuis les "Valeurs par
      * défaut Accounts" (4.4 bis), chiffré via la vraie API Accounts (AccountCrypto),
      * puis lié au provider (Account_Item).
      *
-     * @param bool $isAdmin    Si vrai, force le type de compte sur "BackupGestion — Admin
-     *        compte client Acronis" (auto-provisionné) au lieu du type par défaut
-     *        configuré sur le provider.
-     * @param bool $isCryptkey Si vrai, force le type de compte sur "BackupGestion — Clé de
-     *        chiffrement sauvegarde" (auto-provisionné). Mutuellement exclusif avec
-     *        $isAdmin côté interface ; si les deux sont vrais ici, $isAdmin est prioritaire.
+     * @param bool $isAdmin    Si vrai, force le type de compte sur celui configuré dans
+     *        "Type de compte administrateur (défaut)" (accounts_accounttype_admin_id)
+     *        au lieu du type "utilisateur" (accounts_accounttype_id).
+     * @param bool $isCryptkey Si vrai, force le type de compte sur celui configuré dans
+     *        "Type de compte clé de cryptage (défaut)" (accounts_accounttype_cryptkey_id).
+     *        Mutuellement exclusif avec $isAdmin côté interface ; si les deux sont vrais
+     *        ici, $isAdmin est prioritaire.
      * @return int L'ID du compte Accounts créé.
      * @throws \RuntimeException si le plugin Accounts est absent, si aucune
      *         empreinte n'est configurée/résolue, ou si la création échoue.
@@ -332,10 +305,10 @@ class AccountsVault
         $accounttypeId = (int)($provider->fields['accounts_accounttype_id'] ?? 0);
         $namePrefix    = __('[Sauvegarde] Utilisateur %s', 'backupgestion');
         if ($isAdmin) {
-            $accounttypeId = self::getAdminAccountTypeId() ?? $accounttypeId;
+            $accounttypeId = (int)($provider->fields['accounts_accounttype_admin_id'] ?? 0) ?: $accounttypeId;
             $namePrefix    = __('[Sauvegarde] Admin %s', 'backupgestion');
         } elseif ($isCryptkey) {
-            $accounttypeId = self::getCryptkeyAccountTypeId() ?? $accounttypeId;
+            $accounttypeId = (int)($provider->fields['accounts_accounttype_cryptkey_id'] ?? 0) ?: $accounttypeId;
             $namePrefix    = __('[Sauvegarde] Clé de chiffrement %s', 'backupgestion');
         }
 

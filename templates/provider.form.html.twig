@@ -281,6 +281,8 @@
                     <td><a href="{{ webdir }}/front/provider.form.php?id={{ child.id }}">{{ child.name }}</a></td>
                     <td>{{ child.entity_name }}</td>
                     <td class="d-flex gap-2 align-items-center">
+                        <input type="text" class="form-control form-control-sm bg-quickmove-filter" data-child-id="{{ child.id }}"
+                               placeholder="{{ __('Filtrer...', 'backupgestion') }}" style="width: 120px;" autocomplete="off" />
                         <select class="form-select form-select-sm bg-quickmove-entity" data-child-id="{{ child.id }}" style="width: auto;">
                             {% for eid, ename in allEntities %}
                                 <option value="{{ eid }}" {% if child.entities_id == eid %}selected{% endif %}>{{ ename }}</option>
@@ -350,6 +352,43 @@
             document.querySelectorAll('.bg-btn-quickmove').forEach(function(btn) {
                 btn.addEventListener('click', function() {
                     doMove(btn, btn.dataset.childId, {});
+                });
+            });
+
+            // Filtre texte au-dessus du sélecteur d'entité (retour de Luc : liste
+            // potentiellement longue). On garde la liste complète en mémoire et on
+            // reconstruit les <option> filtrées à la volée, sans dépendance externe.
+            document.querySelectorAll('.bg-quickmove-entity').forEach(function(select) {
+                select.dataset.allOptions = JSON.stringify(
+                    Array.prototype.map.call(select.options, function(o) {
+                        return {value: o.value, label: o.textContent, selected: o.selected};
+                    })
+                );
+            });
+            document.querySelectorAll('.bg-quickmove-filter').forEach(function(input) {
+                input.addEventListener('keyup', function() {
+                    var childId = input.dataset.childId;
+                    var select  = document.querySelector('.bg-quickmove-entity[data-child-id="' + childId + '"]');
+                    var all     = JSON.parse(select.dataset.allOptions || '[]');
+                    var q       = input.value.trim().toLowerCase();
+                    var currentValue = select.value;
+                    var matches = q === '' ? all : all.filter(function(o) {
+                        return o.label.toLowerCase().indexOf(q) !== -1;
+                    });
+                    select.innerHTML = '';
+                    matches.forEach(function(o) {
+                        var opt = document.createElement('option');
+                        opt.value = o.value;
+                        opt.textContent = o.label;
+                        select.appendChild(opt);
+                    });
+                    // Conserve la sélection courante si elle reste dans les résultats filtrés,
+                    // sinon sélectionne la première correspondance.
+                    if (matches.some(function(o) { return o.value === currentValue; })) {
+                        select.value = currentValue;
+                    } else if (matches.length) {
+                        select.value = matches[0].value;
+                    }
                 });
             });
         })();

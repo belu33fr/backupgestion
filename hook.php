@@ -150,6 +150,13 @@ function plugin_backupgestion_migrate(): void
             'accounts_groups_id'                 => "ALTER TABLE `$providerTable` ADD COLUMN `accounts_groups_id` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `accounts_users_id_tech`",
             'accounts_groups_id_tech'            => "ALTER TABLE `$providerTable` ADD COLUMN `accounts_groups_id_tech` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `accounts_groups_id`",
             'accounts_is_helpdesk_visible'       => "ALTER TABLE `$providerTable` ADD COLUMN `accounts_is_helpdesk_visible` TINYINT(1) NOT NULL DEFAULT 0 AFTER `accounts_groups_id_tech`",
+
+            // v0.4.0 — types de compte dédiés pour "Administrateur" et "Clé de cryptage",
+            // configurables explicitement (plutôt qu'un type auto-provisionné retrouvé par
+            // nom à l'exécution, source d'un bug si le provisionnement n'avait pas encore
+            // tourné — retour de Luc). accounts_accounttype_id reste le type "utilisateur".
+            'accounts_accounttype_admin_id'      => "ALTER TABLE `$providerTable` ADD COLUMN `accounts_accounttype_admin_id` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `accounts_is_helpdesk_visible`",
+            'accounts_accounttype_cryptkey_id'   => "ALTER TABLE `$providerTable` ADD COLUMN `accounts_accounttype_cryptkey_id` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `accounts_accounttype_admin_id`",
         ];
         foreach ($cols as $col => $sql) {
             if (!$DB->fieldExists($providerTable, $col)) {

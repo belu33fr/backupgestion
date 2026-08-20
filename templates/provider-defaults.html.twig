@@ -36,7 +36,7 @@
         </div>
 
         <div class="mb-3 row">
-            <label class="col-xxl-4 col-form-label">{{ __('Type de compte Accounts', 'backupgestion') }}</label>
+            <label class="col-xxl-4 col-form-label">{{ __('Type de compte utilisateur', 'backupgestion') }}</label>
             <div class="col-xxl-8">
                 <select name="accounts_accounttype_id" class="form-select">
                     <option value="0">-- {{ __('Aucun', 'backupgestion') }} --</option>
@@ -44,6 +44,32 @@
                         <option value="{{ id }}" {% if item.fields['accounts_accounttype_id'] == id %}selected{% endif %}>{{ name }}</option>
                     {% endfor %}
                 </select>
+            </div>
+        </div>
+
+        <div class="mb-3 row">
+            <label class="col-xxl-4 col-form-label">{{ __('Type de compte administrateur', 'backupgestion') }}</label>
+            <div class="col-xxl-8">
+                <select name="accounts_accounttype_admin_id" class="form-select">
+                    <option value="0">-- {{ __('Aucun (utilise le type utilisateur)', 'backupgestion') }} --</option>
+                    {% for id, name in accountsTypes %}
+                        <option value="{{ id }}" {% if item.fields['accounts_accounttype_admin_id'] == id %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+                <span class="form-text">{{ __('Utilisé quand la case "Administrateur" est cochée lors de la création d\'un compte.', 'backupgestion') }}</span>
+            </div>
+        </div>
+
+        <div class="mb-3 row">
+            <label class="col-xxl-4 col-form-label">{{ __('Type de compte clé de cryptage', 'backupgestion') }}</label>
+            <div class="col-xxl-8">
+                <select name="accounts_accounttype_cryptkey_id" class="form-select">
+                    <option value="0">-- {{ __('Aucun (utilise le type utilisateur)', 'backupgestion') }} --</option>
+                    {% for id, name in accountsTypes %}
+                        <option value="{{ id }}" {% if item.fields['accounts_accounttype_cryptkey_id'] == id %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+                <span class="form-text">{{ __('Utilisé quand la case "Clé de cryptage" est cochée lors de la création d\'un compte.', 'backupgestion') }}</span>
             </div>
         </div>
 
