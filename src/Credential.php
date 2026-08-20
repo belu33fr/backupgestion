@@ -113,6 +113,20 @@ class Credential extends CommonDBTM
         $DB->delete(self::getTable(), ['providers_id' => $providerId]);
     }
 
+    /**
+     * Existence pure (sans déchiffrement) — utilisé pour distinguer un provider avec
+     * ses propres identifiants API d'un provider purement découvert par héritage
+     * (CDC 4.2 bis/4.4 : un enfant "indépendant" ne doit jamais être re-parenté).
+     */
+    public static function existsForProvider(int $providerId): bool
+    {
+        global $DB;
+        return $DB->request([
+            'FROM'  => self::getTable(),
+            'WHERE' => ['providers_id' => $providerId],
+        ])->count() > 0;
+    }
+
     // ------------------------------------------------------------------
     // Chiffrement AES-256-CBC
     // ------------------------------------------------------------------

@@ -132,6 +132,97 @@ class Provider extends CommonDBTM
         Credential::deleteForProvider((int)$this->fields['id']);
     }
 
+    // ------------------------------------------------------------------
+    // Hiérarchie des tenants (CDC 4.2 ter) — découverte manuelle (bouton sur la
+    // fiche). La tâche périodique équivalente (CDC 4.7) arrive au jalon 3.
+    // ------------------------------------------------------------------
+
+    /**
+     * Authentifie ce provider auprès d'Acronis, liste ses tenants enfants directs,
+     * et crée/relie automatiquement un Provider GLPI par tenant découvert — dédupliqué
+     * par acronis_tenant_id (CDC 4.2 bis), jamais par providers_id.
+     *
+     * @return array{tenant_id:string, found:int, created:int, updated:int, skipped:int}
+     * @throws \RuntimeException si l'authentification ou l'appel API échoue.
+     */
+    public function discoverChildren(): array
+    {
+        $id = (int)$this->fields['id'];
+
+        $key         = KeyDerivation::deriveKey($this->fields);
+        $credentials = Credential::getForProvider($id, $key);
+        $acronis     = ProviderFactory::create($this->fields['provider_type'] ?: 'acronis', $credentials);
+
+        if (!$acronis instanceof AcronisProvider) {
+            throw new \RuntimeException(__('La découverte de hiérarchie n\'est disponible que pour un provider Acronis.', 'backupgestion'));
+        }
+
+        $result = $acronis->discoverChildTenants();
+
+        // Mémorise l'identité réelle de ce tenant si elle n'était pas encore connue.
+        if (empty($this->fields['acronis_tenant_id'])) {
+            $this->update(['id' => $id, 'acronis_tenant_id' => $result['tenant_id']]);
+        }
+
+        $created = 0;
+        $updated = 0;
+        $skipped = 0;
+
+        foreach ($result['children'] as $child) {
+            $childTenantId = (string)($child['id'] ?? '');
+            $childName     = (string)($child['name'] ?? $childTenantId);
+            if ($childTenantId === '') {
+                continue;
+            }
+
+            $existing = new self();
+            $found    = $existing->getFromDBByCrit(['acronis_tenant_id' => $childTenantId]);
+
+            if (!$found) {
+                $newInput = [
+                    'name'                               => $childName,
+                    'entities_id'                         => $this->fields['entities_id'],
+                    'is_recursive'                         => 0,
+                    'provider_type'                        => 'acronis',
+                    'acronis_tenant_id'                    => $childTenantId,
+                    'backupgestion_providers_id_parent'    => $id,
+                    'comment'                               => sprintf(__('Découvert automatiquement le %s depuis "%s".', 'backupgestion'), date('Y-m-d H:i'), $this->fields['name']),
+                ];
+                $newID = $existing->add($newInput);
+                if ($newID) {
+                    $created++;
+                }
+                continue;
+            }
+
+            // Provider déjà connu pour ce tenant réel : ne re-parenter que s'il n'a pas
+            // ses propres identifiants API — sinon c'est un provider indépendant (CDC 4.4),
+            // on ne touche jamais à son rattachement parent.
+            $hasOwnCredentials = Credential::existsForProvider((int)$existing->fields['id']);
+            $changes = [];
+            if ($existing->fields['name'] !== $childName) {
+                $changes['name'] = $childName;
+            }
+            if (!$hasOwnCredentials && (int)$existing->fields['backupgestion_providers_id_parent'] !== $id) {
+                $changes['backupgestion_providers_id_parent'] = $id;
+            }
+            if (!empty($changes)) {
+                $existing->update(array_merge(['id' => $existing->fields['id']], $changes));
+                $updated++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        return [
+            'tenant_id' => $result['tenant_id'],
+            'found'     => count($result['children']),
+            'created'   => $created,
+            'updated'   => $updated,
+            'skipped'   => $skipped,
+        ];
+    }
+
     public static function getTypeName($nb = 0): string
     {
         return _n('Provider', 'Providers', $nb, 'backupgestion');

@@ -58,35 +58,69 @@
             </button>
             <span id="bg-test-result"></span>
         </div>
+        <div class="col-12 mb-3 d-flex gap-2 flex-wrap align-items-center">
+            <button type="button" id="bg-btn-discover" class="btn btn-secondary" data-id="{{ item.fields['id'] }}" data-url="{{ webdir }}/front/provider.form.php">
+                <i class="ti ti-hierarchy-2 me-1"></i>{{ __('Découvrir les tenants enfants', 'backupgestion') }}
+            </button>
+            <span id="bg-discover-result"></span>
+        </div>
         <script>
         (function() {
-            var btn = document.getElementById('bg-btn-test');
-            if (!btn) return;
-            btn.addEventListener('click', function() {
-                var result = document.getElementById('bg-test-result');
-                var meta = document.querySelector("meta[property='glpi:csrf_token']");
-                var csrf = meta ? meta.content : '';
+            var csrfMeta = document.querySelector("meta[property='glpi:csrf_token']");
+            var csrf = csrfMeta ? csrfMeta.content : '';
+
+            function postAction(btn, resultEl, body, onSuccess) {
                 btn.disabled = true;
-                result.innerHTML = "<span class='badge bg-info'>" + {{ __('En cours...', 'backupgestion')|json_encode|raw }} + "</span>";
+                resultEl.innerHTML = "<span class='badge bg-info'>" + {{ __('En cours...', 'backupgestion')|json_encode|raw }} + "</span>";
                 fetch(btn.dataset.url, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Glpi-Csrf-Token': csrf, 'X-Requested-With': 'XMLHttpRequest'},
-                    body: new URLSearchParams({test_connection: '1', id: btn.dataset.id})
+                    body: new URLSearchParams(body)
                 })
                 .then(function(r) { return r.json(); })
                 .then(function(d) {
                     btn.disabled = false;
                     if (d.success) {
-                        result.innerHTML = "<span class='badge bg-success'>" + {{ __('Connexion réussie', 'backupgestion')|json_encode|raw }} + "</span>";
+                        onSuccess(d, resultEl);
                     } else {
-                        result.innerHTML = "<span class='badge bg-danger'>" + (d.message || {{ __('Échec de connexion', 'backupgestion')|json_encode|raw }}) + "</span>";
+                        resultEl.innerHTML = "<span class='badge bg-danger'>" + (d.message || {{ __('Échec', 'backupgestion')|json_encode|raw }}) + "</span>";
                     }
                 })
                 .catch(function() {
                     btn.disabled = false;
-                    result.innerHTML = "<span class='badge bg-danger'>" + {{ __('Erreur réseau', 'backupgestion')|json_encode|raw }} + "</span>";
+                    resultEl.innerHTML = "<span class='badge bg-danger'>" + {{ __('Erreur réseau', 'backupgestion')|json_encode|raw }} + "</span>";
                 });
-            });
+            }
+
+            var testBtn = document.getElementById('bg-btn-test');
+            if (testBtn) {
+                testBtn.addEventListener('click', function() {
+                    postAction(testBtn, document.getElementById('bg-test-result'),
+                        {test_connection: '1', id: testBtn.dataset.id},
+                        function(d, el) {
+                            el.innerHTML = "<span class='badge bg-success'>" + {{ __('Connexion réussie', 'backupgestion')|json_encode|raw }} + "</span>";
+                        }
+                    );
+                });
+            }
+
+            var discoverBtn = document.getElementById('bg-btn-discover');
+            if (discoverBtn) {
+                discoverBtn.addEventListener('click', function() {
+                    postAction(discoverBtn, document.getElementById('bg-discover-result'),
+                        {discover_children: '1', id: discoverBtn.dataset.id},
+                        function(d, el) {
+                            var msg = (d.found || 0) + ' ' + {{ __('trouvé(s)', 'backupgestion')|json_encode|raw }}
+                                + ' — ' + (d.created || 0) + ' ' + {{ __('créé(s)', 'backupgestion')|json_encode|raw }}
+                                + ', ' + (d.updated || 0) + ' ' + {{ __('mis à jour', 'backupgestion')|json_encode|raw }};
+                            el.innerHTML = "<span class='badge bg-success'>" + msg + "</span>";
+                            if ((d.created || 0) > 0) {
+                                setTimeout(function() { window.location.reload(); }, 1500);
+                            }
+                        }
+                    );
+                });
+            }
         })();
         </script>
     {% else %}

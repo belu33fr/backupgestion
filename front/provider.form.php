@@ -32,7 +32,23 @@ function backupgestion_extract_credentials(array &$input): array
     return $credentials;
 }
 
-if (isset($_POST['test_connection'])) {
+if (isset($_POST['discover_children'])) {
+    // Découverte de la hiérarchie de tenants depuis la fiche (AJAX) — CDC 4.2 ter
+    header('Content-Type: application/json');
+    $id = (int)($_POST['id'] ?? 0);
+    if (!$provider->getFromDB($id) || !$provider->can($id, UPDATE)) {
+        echo json_encode(['success' => false, 'message' => __('Accès refusé.', 'backupgestion')]);
+        exit;
+    }
+    try {
+        $result = $provider->discoverChildren();
+        echo json_encode(['success' => true] + $result);
+    } catch (\Throwable $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    }
+    exit;
+
+} elseif (isset($_POST['test_connection'])) {
     // Test de connexion depuis la fiche (AJAX)
     header('Content-Type: application/json');
     $id = (int)($_POST['id'] ?? 0);
@@ -52,23 +68,15 @@ if (isset($_POST['test_connection'])) {
     exit;
 
 } elseif (isset($_POST['add'])) {
-    $input       = $_POST;
+    $input = $_POST;
     unset($input['add']);
     $credentials = backupgestion_extract_credentials($input);
-    error_log('BackupGestion add: cred_keys_found=' . implode(',', array_keys($credentials)));
 
+    $provider->check(-1, CREATE, $input);
     $newID = $provider->add($input);
-    error_log('BackupGestion add: newID=' . var_export($newID, true));
     if ($newID && !empty($credentials)) {
-        try {
-            $key = KeyDerivation::deriveKey($provider->fields);
-            Credential::saveForProvider($newID, $credentials, $key);
-            error_log('BackupGestion add: credentials saved for provider ' . $newID);
-        } catch (\Throwable $e) {
-            error_log('BackupGestion add: FAILED to save credentials - ' . $e->getMessage());
-        }
-    } elseif (empty($credentials)) {
-        error_log('BackupGestion add: no cred_* fields received in $_POST — form/field name mismatch?');
+        $key = KeyDerivation::deriveKey($provider->fields);
+        Credential::saveForProvider($newID, $credentials, $key);
     }
 
     if ($newID && ($_SESSION['glpibackcreated'] ?? false)) {
@@ -77,25 +85,16 @@ if (isset($_POST['test_connection'])) {
     Html::back();
 
 } elseif (isset($_POST['update'])) {
-    $id          = (int)$_POST['id'];
-    $input       = $_POST;
+    $id    = (int)$_POST['id'];
+    $input = $_POST;
     $credentials = backupgestion_extract_credentials($input);
-    error_log('BackupGestion update: id=' . $id . ' cred_keys_found=' . implode(',', array_keys($credentials)));
 
-    $updated = $provider->update($input);
-    error_log('BackupGestion update: update()=' . var_export($updated, true));
-    if ($updated && !empty($credentials)) {
+    $provider->check($id, UPDATE);
+    if ($provider->update($input) && !empty($credentials)) {
         // $provider->fields reflète l'état après update() — y compris un éventuel
         // nouveau snapshot de clé si l'entité/le référent a changé (Provider::prepareInputForUpdate).
-        try {
-            $key = KeyDerivation::deriveKey($provider->fields);
-            Credential::saveForProvider($id, $credentials, $key);
-            error_log('BackupGestion update: credentials saved for provider ' . $id);
-        } catch (\Throwable $e) {
-            error_log('BackupGestion update: FAILED to save credentials - ' . $e->getMessage());
-        }
-    } elseif (empty($credentials)) {
-        error_log('BackupGestion update: no cred_* fields received in $_POST — form/field name mismatch?');
+        $key = KeyDerivation::deriveKey($provider->fields);
+        Credential::saveForProvider($id, $credentials, $key);
     }
     Html::back();
 
