@@ -130,6 +130,125 @@
         </div>
     {% endif %}
 
+    {{ fields.smallTitle(__('Valeurs par défaut Accounts (compte admin client Acronis)', 'backupgestion')) }}
+
+    {% if not accountsAvailable %}
+        <div class="alert alert-warning">
+            <i class="ti ti-alert-triangle me-2"></i>
+            {{ __('Plugin Accounts non détecté — cette zone ne concerne que les secrets de catégorie (b) (ex. compte admin du tenant Acronis) et est indépendante des identifiants API ci-dessus.', 'backupgestion') }}
+        </div>
+    {% else %}
+        <div class="alert alert-info">
+            <i class="ti ti-info-circle me-2"></i>
+            {{ __('Ces valeurs pré-remplissent la fiche de création du compte dans Accounts (nom, identifiant, mot de passe restent toujours saisis directement dans Accounts — jamais ici).', 'backupgestion') }}
+        </div>
+
+        <div class="mb-3 row">
+            <label class="col-xxl-4 col-form-label">{{ __('Empreinte à utiliser', 'backupgestion') }}</label>
+            <div class="col-xxl-8">
+                <select name="accounts_hash_id" class="form-select">
+                    <option value="0">-- {{ __('Aucune / à choisir dans Accounts', 'backupgestion') }} --</option>
+                    {% for id, name in accountsHashes %}
+                        <option value="{{ id }}" {% if item.fields['accounts_hash_id'] == id %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="mb-3 row">
+            <label class="col-xxl-4 col-form-label">{{ __('Type de compte Accounts', 'backupgestion') }}</label>
+            <div class="col-xxl-8">
+                <select name="accounts_accounttype_id" class="form-select">
+                    <option value="0">-- {{ __('Aucun', 'backupgestion') }} --</option>
+                    {% for id, name in accountsTypes %}
+                        <option value="{{ id }}" {% if item.fields['accounts_accounttype_id'] == id %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="mb-3 row">
+            <label class="col-xxl-4 col-form-label">{{ __('Statut par défaut', 'backupgestion') }}</label>
+            <div class="col-xxl-8">
+                <select name="accounts_accountstates_id" class="form-select">
+                    <option value="0">-- {{ __('Aucun', 'backupgestion') }} --</option>
+                    {% for id, name in accountsStates %}
+                        <option value="{{ id }}" {% if item.fields['accounts_accountstates_id'] == id %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        {{ fields.dropdownField('User', 'accounts_users_id', item.fields['accounts_users_id'] ?? 0, __('Utilisateur concerné (défaut)', 'backupgestion'), {'display_emptychoice': true}) }}
+        {{ fields.dropdownField('User', 'accounts_users_id_tech', item.fields['accounts_users_id_tech'] ?? 0, __('Technicien responsable (défaut)', 'backupgestion'), {'display_emptychoice': true}) }}
+        {{ fields.dropdownField('Group', 'accounts_groups_id', item.fields['accounts_groups_id'] ?? 0, __('Groupe concerné (défaut)', 'backupgestion'), {'display_emptychoice': true}) }}
+        {{ fields.dropdownField('Group', 'accounts_groups_id_tech', item.fields['accounts_groups_id_tech'] ?? 0, __('Groupe responsable (défaut)', 'backupgestion'), {'display_emptychoice': true}) }}
+
+        <div class="mb-3 row">
+            <label class="col-xxl-4 col-form-label">{{ __('Associable à un ticket', 'backupgestion') }}</label>
+            <div class="col-xxl-8">
+                <input type="hidden" name="accounts_is_helpdesk_visible" value="0" />
+                <input type="checkbox" name="accounts_is_helpdesk_visible" value="1" class="form-check-input"
+                       {% if item.fields['accounts_is_helpdesk_visible'] %}checked{% endif %} />
+            </div>
+        </div>
+
+        {% if item.fields['id'] %}
+            <div class="col-12 mb-3 d-flex gap-2 flex-wrap align-items-center">
+                <a href="{{ accountsAdminAddUrl }}" target="_blank" class="btn btn-primary">
+                    <i class="ti ti-key me-1"></i>{{ __('Créer le compte admin dans Accounts', 'backupgestion') }}
+                </a>
+            </div>
+            <div class="mb-3 row">
+                <label class="col-xxl-4 col-form-label">{{ __('Lier un compte Accounts existant (ID)', 'backupgestion') }}</label>
+                <div class="col-xxl-8 d-flex gap-2">
+                    <input type="number" min="1" id="bg-accounts-link-id" class="form-control" style="max-width: 150px;" />
+                    <button type="button" id="bg-btn-link-accounts" class="btn btn-secondary" data-id="{{ item.fields['id'] }}" data-url="{{ webdir }}/front/provider.form.php">
+                        {{ __('Lier au provider', 'backupgestion') }}
+                    </button>
+                    <span id="bg-link-accounts-result"></span>
+                </div>
+            </div>
+            <script>
+            (function() {
+                var csrfMeta = document.querySelector("meta[property='glpi:csrf_token']");
+                var csrf = csrfMeta ? csrfMeta.content : '';
+                var linkBtn = document.getElementById('bg-btn-link-accounts');
+                if (linkBtn) {
+                    linkBtn.addEventListener('click', function() {
+                        var accId = document.getElementById('bg-accounts-link-id').value;
+                        var resultEl = document.getElementById('bg-link-accounts-result');
+                        linkBtn.disabled = true;
+                        fetch(linkBtn.dataset.url, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Glpi-Csrf-Token': csrf, 'X-Requested-With': 'XMLHttpRequest'},
+                            body: new URLSearchParams({link_accounts_admin: '1', id: linkBtn.dataset.id, accounts_account_id: accId})
+                        })
+                        .then(function(r) { return r.json(); })
+                        .then(function(d) {
+                            linkBtn.disabled = false;
+                            if (d.success) {
+                                resultEl.innerHTML = "<span class='badge bg-success'>" + {{ __('Lié', 'backupgestion')|json_encode|raw }} + "</span>";
+                            } else {
+                                resultEl.innerHTML = "<span class='badge bg-danger'>" + (d.message || {{ __('Échec', 'backupgestion')|json_encode|raw }}) + "</span>";
+                            }
+                        })
+                        .catch(function() {
+                            linkBtn.disabled = false;
+                            resultEl.innerHTML = "<span class='badge bg-danger'>" + {{ __('Erreur réseau', 'backupgestion')|json_encode|raw }} + "</span>";
+                        });
+                    });
+                }
+            })();
+            </script>
+        {% else %}
+            <div class="alert alert-info mt-2">
+                <i class="ti ti-info-circle me-2"></i>
+                {{ __('La création du compte admin sera possible après la première sauvegarde de la fiche.', 'backupgestion') }}
+            </div>
+        {% endif %}
+    {% endif %}
+
     {% if children|length %}
         {{ fields.smallTitle(__('Sous-tenants rattachés', 'backupgestion')) }}
         <table class="table table-sm">

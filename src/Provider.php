@@ -341,17 +341,29 @@ class Provider extends CommonDBTM
             }
         }
 
+        $entitiesId          = (int)($this->fields['entities_id'] ?? 0);
+        $accountsAvailable   = AccountsVault::isAvailable();
+        $accountsAdminAddUrl = '';
+        if ($accountsAvailable && ($this->fields['id'] ?? 0)) {
+            $accountsAdminAddUrl = AccountsVault::buildAdminAccountAddUrl($this);
+        }
+
         \Glpi\Application\View\TemplateRenderer::getInstance()->display(
             '@backupgestion/provider.form.html.twig',
             [
-                'item'             => $this,
-                'params'           => $options,
-                'providerLabel'    => ProviderFactory::getAvailableProviders()['acronis'] ?? 'Acronis',
-                'credentialFields' => ProviderFactory::getCredentialFields('acronis'),
-                'hasCredentials'   => $hasCredentials,
-                'prefillValues'    => $prefillValues,
-                'children'         => $children,
-                'webdir'           => Plugin::getWebDir('backupgestion'),
+                'item'                 => $this,
+                'params'               => $options,
+                'providerLabel'        => ProviderFactory::getAvailableProviders()['acronis'] ?? 'Acronis',
+                'credentialFields'     => ProviderFactory::getCredentialFields('acronis'),
+                'hasCredentials'       => $hasCredentials,
+                'prefillValues'        => $prefillValues,
+                'children'             => $children,
+                'webdir'               => Plugin::getWebDir('backupgestion'),
+                'accountsAvailable'    => $accountsAvailable,
+                'accountsHashes'       => $accountsAvailable ? AccountsVault::listHashes($entitiesId) : [],
+                'accountsTypes'        => $accountsAvailable ? AccountsVault::listAccountTypes($entitiesId) : [],
+                'accountsStates'       => $accountsAvailable ? AccountsVault::listAccountStates($entitiesId) : [],
+                'accountsAdminAddUrl'  => $accountsAdminAddUrl,
             ]
         );
 

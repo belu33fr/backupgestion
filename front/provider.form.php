@@ -1,5 +1,6 @@
 <?php
 
+use GlpiPlugin\Backupgestion\AccountsVault;
 use GlpiPlugin\Backupgestion\Credential;
 use GlpiPlugin\Backupgestion\KeyDerivation;
 use GlpiPlugin\Backupgestion\Provider;
@@ -43,6 +44,28 @@ if (isset($_POST['discover_children'])) {
     try {
         $result = $provider->discoverChildren();
         echo json_encode(['success' => true] + $result);
+    } catch (\Throwable $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    }
+    exit;
+
+} elseif (isset($_POST['link_accounts_admin'])) {
+    // Associe (Account_Item) un compte Accounts déjà créé (catégorie b, via la fiche
+    // native Accounts) à ce provider — aucune donnée sensible ne transite ici (CDC 4.4).
+    header('Content-Type: application/json');
+    $id        = (int)($_POST['id'] ?? 0);
+    $accountId = (int)($_POST['accounts_account_id'] ?? 0);
+    if (!$provider->getFromDB($id) || !$provider->can($id, UPDATE)) {
+        echo json_encode(['success' => false, 'message' => __('Accès refusé.', 'backupgestion')]);
+        exit;
+    }
+    if ($accountId <= 0) {
+        echo json_encode(['success' => false, 'message' => __('Identifiant de compte Accounts invalide.', 'backupgestion')]);
+        exit;
+    }
+    try {
+        $ok = AccountsVault::linkToItem($accountId, Provider::class, $id);
+        echo json_encode(['success' => $ok]);
     } catch (\Throwable $e) {
         echo json_encode(['success' => false, 'message' => $e->getMessage()]);
     }

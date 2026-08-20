@@ -137,6 +137,19 @@ function plugin_backupgestion_migrate(): void
             'keyowner_name'                      => "ALTER TABLE `$providerTable` ADD COLUMN `keyowner_name` VARCHAR(255) NOT NULL DEFAULT '' AFTER `users_id_keyowner`",
             'keyowner_email'                     => "ALTER TABLE `$providerTable` ADD COLUMN `keyowner_email` VARCHAR(255) NOT NULL DEFAULT '' AFTER `keyowner_name`",
             'entity_name_snapshot'               => "ALTER TABLE `$providerTable` ADD COLUMN `entity_name_snapshot` VARCHAR(255) NOT NULL DEFAULT '' AFTER `keyowner_email`",
+
+            // v0.3.0 (jalon 2, intégration Accounts — CDC 4.4 bis) — "Valeurs par défaut
+            // Accounts" : ne stockent jamais de secret, uniquement des références de
+            // pré-remplissage utilisées lors de la création manuelle d'un compte Accounts
+            // (catégorie b) pour ce provider (voir AccountsVault::buildProviderPrefillQuery()).
+            'accounts_hash_id'                   => "ALTER TABLE `$providerTable` ADD COLUMN `accounts_hash_id` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `entity_name_snapshot`",
+            'accounts_accounttype_id'            => "ALTER TABLE `$providerTable` ADD COLUMN `accounts_accounttype_id` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `accounts_hash_id`",
+            'accounts_accountstates_id'          => "ALTER TABLE `$providerTable` ADD COLUMN `accounts_accountstates_id` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `accounts_accounttype_id`",
+            'accounts_users_id'                  => "ALTER TABLE `$providerTable` ADD COLUMN `accounts_users_id` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `accounts_accountstates_id`",
+            'accounts_users_id_tech'             => "ALTER TABLE `$providerTable` ADD COLUMN `accounts_users_id_tech` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `accounts_users_id`",
+            'accounts_groups_id'                 => "ALTER TABLE `$providerTable` ADD COLUMN `accounts_groups_id` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `accounts_users_id_tech`",
+            'accounts_groups_id_tech'            => "ALTER TABLE `$providerTable` ADD COLUMN `accounts_groups_id_tech` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `accounts_groups_id`",
+            'accounts_is_helpdesk_visible'       => "ALTER TABLE `$providerTable` ADD COLUMN `accounts_is_helpdesk_visible` TINYINT(1) NOT NULL DEFAULT 0 AFTER `accounts_groups_id_tech`",
         ];
         foreach ($cols as $col => $sql) {
             if (!$DB->fieldExists($providerTable, $col)) {
@@ -177,5 +190,17 @@ function plugin_backupgestion_migrate(): void
             DEFAULT CHARSET={$default_charset}
             COLLATE={$default_collation}
         ");
+    }
+
+    // Type de compte Accounts dédié (catégorie b — CDC 4.4/4.4 bis), créé de façon
+    // best-effort : si le plugin Accounts est absent ou si la table n'a pas la forme
+    // attendue, on ignore silencieusement plutôt que de bloquer install/activate — un
+    // administrateur peut toujours créer ce type manuellement dans Accounts.
+    if (class_exists('\GlpiPlugin\Accounts\Account')) {
+        try {
+            \GlpiPlugin\Backupgestion\AccountsVault::provisionDefaultAccountType();
+        } catch (\Throwable $e) {
+            // best-effort — ne jamais faire échouer install/activate pour ça.
+        }
     }
 }
