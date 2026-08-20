@@ -210,8 +210,12 @@ class Provider extends CommonDBTM
     {
         $this->initForm($ID, $options);
 
-        $hasCredentials = [];
-        $children       = [];
+        $hasCredentials  = [];
+        $prefillValues   = [];
+        $children        = [];
+        // Champs jamais renvoyés en clair au navigateur, même sur la fiche d'édition —
+        // le seul "vrai" secret parmi les identifiants (comme le mot de passe DNSManager).
+        $neverPrefilled  = ['client_secret'];
 
         if ($this->fields['id'] ?? 0) {
             global $DB;
@@ -221,6 +225,21 @@ class Provider extends CommonDBTM
                 'SELECT' => ['cred_key'],
             ]) as $row) {
                 $hasCredentials[$row['cred_key']] = true;
+            }
+
+            // Pré-remplissage des champs non sensibles (ID, URL) avec leur valeur réelle
+            // déchiffrée — même principe que DNSManager : seul le vrai secret (mot de
+            // passe / client_secret) reste vide sur la fiche d'édition.
+            try {
+                $key = KeyDerivation::deriveKey($this->fields);
+                foreach (Credential::getForProvider((int)$this->fields['id'], $key) as $credKey => $value) {
+                    if (!in_array($credKey, $neverPrefilled, true)) {
+                        $prefillValues[$credKey] = $value;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Pas de sel/clé exploitable (ex. provider créé avant le jalon 2) :
+                // pas de pré-remplissage, l'utilisateur ressaisira tout — pas bloquant.
             }
 
             foreach ($DB->request([
@@ -234,13 +253,14 @@ class Provider extends CommonDBTM
         \Glpi\Application\View\TemplateRenderer::getInstance()->display(
             '@backupgestion/provider.form.html.twig',
             [
-                'item'            => $this,
-                'params'          => $options,
-                'providerLabel'   => ProviderFactory::getAvailableProviders()['acronis'] ?? 'Acronis',
+                'item'             => $this,
+                'params'           => $options,
+                'providerLabel'    => ProviderFactory::getAvailableProviders()['acronis'] ?? 'Acronis',
                 'credentialFields' => ProviderFactory::getCredentialFields('acronis'),
-                'hasCredentials'  => $hasCredentials,
-                'children'        => $children,
-                'webdir'          => Plugin::getWebDir('backupgestion'),
+                'hasCredentials'   => $hasCredentials,
+                'prefillValues'    => $prefillValues,
+                'children'         => $children,
+                'webdir'           => Plugin::getWebDir('backupgestion'),
             ]
         );
 

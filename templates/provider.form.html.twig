@@ -23,11 +23,30 @@
                 {{ def.label }}{% if def.required %} *{% endif %}
             </label>
             <div class="col-xxl-8">
-                <input type="{{ def.type == 'password' ? 'password' : 'text' }}"
-                       name="cred_{{ key }}"
-                       class="form-control"
-                       autocomplete="off"
-                       placeholder="{{ hasCredentials[key] is defined ? __('Déjà renseigné — laisser vide pour ne pas modifier', 'backupgestion') : (def.placeholder ?? '') }}" />
+                {% if def.type == 'password' %}
+                    {# Le vrai secret n'est jamais renvoyé en clair au navigateur, même en
+                       édition (comme le mot de passe DNSManager) — champ toujours vide, avec
+                       readonly-au-chargement pour empêcher Chrome/Firefox de proposer un
+                       identifiant/mot de passe enregistré sur ce champ vide. #}
+                    <input type="password"
+                           name="cred_{{ key }}"
+                           class="form-control"
+                           autocomplete="new-password"
+                           readonly
+                           onfocus="this.removeAttribute('readonly')"
+                           data-lpignore="true"
+                           data-1p-ignore
+                           placeholder="{{ hasCredentials[key] is defined ? __('Déjà renseigné — laisser vide pour ne pas modifier', 'backupgestion') : (def.placeholder ?? '') }}" />
+                {% else %}
+                    {# Non sensible (identifiant, URL) — pré-rempli avec la vraie valeur
+                       déchiffrée en édition, comme DNSManager. #}
+                    <input type="text"
+                           name="cred_{{ key }}"
+                           class="form-control"
+                           autocomplete="off"
+                           value="{{ prefillValues[key] ?? '' }}"
+                           placeholder="{{ def.placeholder ?? '' }}" />
+                {% endif %}
             </div>
         </div>
     {% endfor %}

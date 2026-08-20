@@ -55,11 +55,20 @@ if (isset($_POST['test_connection'])) {
     $input       = $_POST;
     unset($input['add']);
     $credentials = backupgestion_extract_credentials($input);
+    error_log('BackupGestion add: cred_keys_found=' . implode(',', array_keys($credentials)));
 
     $newID = $provider->add($input);
+    error_log('BackupGestion add: newID=' . var_export($newID, true));
     if ($newID && !empty($credentials)) {
-        $key = KeyDerivation::deriveKey($provider->fields);
-        Credential::saveForProvider($newID, $credentials, $key);
+        try {
+            $key = KeyDerivation::deriveKey($provider->fields);
+            Credential::saveForProvider($newID, $credentials, $key);
+            error_log('BackupGestion add: credentials saved for provider ' . $newID);
+        } catch (\Throwable $e) {
+            error_log('BackupGestion add: FAILED to save credentials - ' . $e->getMessage());
+        }
+    } elseif (empty($credentials)) {
+        error_log('BackupGestion add: no cred_* fields received in $_POST — form/field name mismatch?');
     }
 
     if ($newID && ($_SESSION['glpibackcreated'] ?? false)) {
@@ -71,12 +80,22 @@ if (isset($_POST['test_connection'])) {
     $id          = (int)$_POST['id'];
     $input       = $_POST;
     $credentials = backupgestion_extract_credentials($input);
+    error_log('BackupGestion update: id=' . $id . ' cred_keys_found=' . implode(',', array_keys($credentials)));
 
-    if ($provider->update($input) && !empty($credentials)) {
+    $updated = $provider->update($input);
+    error_log('BackupGestion update: update()=' . var_export($updated, true));
+    if ($updated && !empty($credentials)) {
         // $provider->fields reflète l'état après update() — y compris un éventuel
         // nouveau snapshot de clé si l'entité/le référent a changé (Provider::prepareInputForUpdate).
-        $key = KeyDerivation::deriveKey($provider->fields);
-        Credential::saveForProvider($id, $credentials, $key);
+        try {
+            $key = KeyDerivation::deriveKey($provider->fields);
+            Credential::saveForProvider($id, $credentials, $key);
+            error_log('BackupGestion update: credentials saved for provider ' . $id);
+        } catch (\Throwable $e) {
+            error_log('BackupGestion update: FAILED to save credentials - ' . $e->getMessage());
+        }
+    } elseif (empty($credentials)) {
+        error_log('BackupGestion update: no cred_* fields received in $_POST — form/field name mismatch?');
     }
     Html::back();
 
