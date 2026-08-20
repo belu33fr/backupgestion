@@ -130,7 +130,7 @@
         </div>
     {% endif %}
 
-    {{ fields.smallTitle(__('Valeurs par défaut Accounts (compte admin client Acronis)', 'backupgestion')) }}
+    {{ fields.smallTitle(__('Compte admin Acronis (stocké dans Accounts, distinct des identifiants API ci-dessus)', 'backupgestion')) }}
 
     {% if not accountsAvailable %}
         <div class="alert alert-warning">
@@ -140,11 +140,37 @@
     {% else %}
         <div class="alert alert-info">
             <i class="ti ti-info-circle me-2"></i>
-            {{ __('Ces valeurs pré-remplissent la fiche de création du compte dans Accounts (nom, identifiant, mot de passe restent toujours saisis directement dans Accounts — jamais ici).', 'backupgestion') }}
+            {{ __('Le compte admin est le compte humain qui donne accès à la console Cloud du client (distinct des identifiants API ci-dessus, utilisés uniquement par le plugin). Les champs ci-dessous ("Valeurs par défaut") pré-remplissent sa fiche au moment de sa création, plus bas sur cette page.', 'backupgestion') }}
         </div>
 
+        {% if accountsHashes|length == 0 %}
+            <div class="alert alert-warning">
+                <i class="ti ti-alert-triangle me-2"></i>
+                {{ __('Aucune empreinte Accounts disponible pour cette entité. Créez-en une dans le plugin Accounts (menu Accounts → Empreintes) avant de pouvoir créer le compte admin ici.', 'backupgestion') }}
+            </div>
+            <div class="alert alert-secondary">
+                <strong>{{ __('Diagnostic temporaire', 'backupgestion') }}</strong> —
+                {{ __('entité de ce provider', 'backupgestion') }} : <code>{{ item.fields['entities_id'] }}</code>
+                <table class="table table-sm mt-2 mb-0">
+                    <thead><tr><th>id</th><th>name</th><th>entities_id</th><th>is_recursive</th></tr></thead>
+                    <tbody>
+                    {% for row in accountsDebugRows %}
+                        <tr>
+                            <td>{{ row.id }}</td>
+                            <td>{{ row.name }}</td>
+                            <td>{{ row.entities_id }}</td>
+                            <td>{{ row.is_recursive }}</td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="4">{{ __('(table vide — aucune empreinte n\'existe du tout dans Accounts)', 'backupgestion') }}</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+
         <div class="mb-3 row">
-            <label class="col-xxl-4 col-form-label">{{ __('Empreinte à utiliser', 'backupgestion') }}</label>
+            <label class="col-xxl-4 col-form-label">{{ __('Empreinte à utiliser (défaut)', 'backupgestion') }}</label>
             <div class="col-xxl-8">
                 <select name="accounts_hash_id" class="form-select">
                     <option value="0">-- {{ __('Aucune / à choisir dans Accounts', 'backupgestion') }} --</option>

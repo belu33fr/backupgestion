@@ -59,17 +59,89 @@ class AccountsVault
 
         $where = [];
         if ($DB->fieldExists($table, 'entities_id')) {
-            // Même mécanisme que Accounts::showForm() pour ses propres listes (empreintes,
-            // etc.) : getEntitiesRestrictCriteria() (fonction globale GLPI) gère nativement
-            // la récursivité — on l'utilise à l'identique plutôt que de réinventer la
-            // résolution des entités parentes.
-            $recursive = $DB->fieldExists($table, 'is_recursive');
-            $where     = getEntitiesRestrictCriteria($table, '', $entities_id, $recursive);
+            // Résolution des entités parentes construite nous-mêmes (lecture directe de
+            // glpi_entities.entities_id, schéma stable du cœur GLPI) plutôt que via un
+            // helper GLPI dont la signature exacte n'était pas fiable (cause du bug
+            // précédent avec Entity::getAncestorsOf) : une empreinte définie précisément
+            // sur cette entité est toujours visible ; une empreinte définie sur une entité
+            // parente (y compris la racine, "toutes les entités") n'est visible que si elle
+            // est marquée récursive — comportement confirmé par Luc.
+            $ancestors = self::getAncestorEntityIds($entities_id);
+            $orCriteria = ['entities_id' => $entities_id];
+            if ($DB->fieldExists($table, 'is_recursive')) {
+                $orCriteria = [
+                    'OR' => [
+                        ['entities_id' => $entities_id],
+                        ['entities_id' => $ancestors, 'is_recursive' => 1],
+                    ],
+                ];
+            } else {
+                $orCriteria = ['entities_id' => array_merge([$entities_id], $ancestors)];
+            }
+            $where = $orCriteria;
         }
 
         $rows = [];
         foreach ($DB->request(['FROM' => $table, 'WHERE' => $where, 'ORDER' => 'name ASC']) as $row) {
             $rows[(int)$row['id']] = $row['name'] !== '' ? $row['name'] : ('#' . $row['id']);
+        }
+        return $rows;
+    }
+
+    /**
+     * Remonte la chaîne des entités parentes de $entities_id (elle-même exclue),
+     * jusqu'à la racine (id 0) — lecture directe de glpi_entities, sans dépendance
+     * à un helper GLPI dont le comportement exact ne peut pas être vérifié ici.
+     */
+    private static function getAncestorEntityIds(int $entities_id): array
+    {
+        global $DB;
+
+        $ancestors = [];
+        $current   = $entities_id;
+        $guard     = 0;
+
+        while ($guard++ < 50) {
+            if ($current === 0) {
+                if (!in_array(0, $ancestors, true)) {
+                    $ancestors[] = 0;
+                }
+                break;
+            }
+            $row = $DB->request([
+                'FROM'   => 'glpi_entities',
+                'WHERE'  => ['id' => $current],
+                'SELECT' => ['entities_id'],
+            ])->current();
+            if (!$row) {
+                break;
+            }
+            $parent = (int)$row['entities_id'];
+            if ($parent === $current || in_array($parent, $ancestors, true)) {
+                break;
+            }
+            $ancestors[] = $parent;
+            $current     = $parent;
+        }
+
+        return $ancestors;
+    }
+
+    /**
+     * Diagnostic temporaire (à retirer une fois le filtrage d'entité validé en
+     * conditions réelles) : contenu brut de la table des empreintes, sans jamais
+     * exposer le vérificateur de clé (colonne "hash") — seulement id/nom/entité.
+     */
+    public static function debugHashRows(): array
+    {
+        global $DB;
+        $table = 'glpi_plugin_accounts_hashes';
+        if (!self::isAvailable() || !$DB->tableExists($table)) {
+            return [];
+        }
+        $rows = [];
+        foreach ($DB->request(['FROM' => $table, 'SELECT' => ['id', 'name', 'entities_id', 'is_recursive']]) as $row) {
+            $rows[] = $row;
         }
         return $rows;
     }

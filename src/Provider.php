@@ -223,6 +223,38 @@ class Provider extends CommonDBTM
         ];
     }
 
+    /**
+     * Entité donnée + toutes ses sous-entités (lecture directe de glpi_entities.entities_id,
+     * schéma stable du cœur GLPI) — pas de dépendance à un helper GLPI dont le comportement
+     * exact ne peut pas être vérifié ici (cf. AccountsVault::getAncestorEntityIds()).
+     */
+    private static function getDescendantEntityIds(int $entities_id): array
+    {
+        global $DB;
+
+        $result   = [$entities_id];
+        $frontier = [$entities_id];
+        $guard    = 0;
+
+        while (!empty($frontier) && $guard++ < 50) {
+            $next = [];
+            foreach ($DB->request([
+                'FROM'   => 'glpi_entities',
+                'WHERE'  => ['entities_id' => $frontier],
+                'SELECT' => ['id'],
+            ]) as $row) {
+                $id = (int)$row['id'];
+                if (!in_array($id, $result, true)) {
+                    $result[] = $id;
+                    $next[]   = $id;
+                }
+            }
+            $frontier = $next;
+        }
+
+        return $result;
+    }
+
     public static function getTypeName($nb = 0): string
     {
         return _n('Provider', 'Providers', $nb, 'backupgestion');
@@ -333,9 +365,18 @@ class Provider extends CommonDBTM
                 // pas de pré-remplissage, l'utilisateur ressaisira tout — pas bloquant.
             }
 
+            // Ne lister que les enfants dont l'entité est celle du parent ou une
+            // sous-entité de celle-ci : un enfant resté dans son entité d'origine après
+            // un déplacement du parent (backupgestion_providers_id_parent seul ne bouge
+            // pas les entités) ne doit plus apparaître si son entité n'est plus visible
+            // depuis celle du parent — confirmé par Luc.
+            $visibleEntities = self::getDescendantEntityIds((int)$this->fields['entities_id']);
             foreach ($DB->request([
                 'FROM'  => self::getTable(),
-                'WHERE' => ['backupgestion_providers_id_parent' => $this->fields['id']],
+                'WHERE' => [
+                    'backupgestion_providers_id_parent' => $this->fields['id'],
+                    'entities_id'                        => $visibleEntities,
+                ],
             ]) as $row) {
                 $children[] = $row;
             }
@@ -376,6 +417,7 @@ class Provider extends CommonDBTM
                 'accountsTypes'        => $accountsTypes,
                 'accountsStates'       => $accountsStates,
                 'accountsHashId'       => (int)($this->fields['accounts_hash_id'] ?? 0),
+                'accountsDebugRows'    => ($accountsAvailable && empty($accountsHashes)) ? AccountsVault::debugHashRows() : [],
             ]
         );
 
