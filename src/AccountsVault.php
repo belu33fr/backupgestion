@@ -290,10 +290,14 @@ class AccountsVault
         if ($password === '') {
             throw new \RuntimeException(__('Mot de passe requis.', 'backupgestion'));
         }
-        if (!$isCryptkey) {
-            // Une "Clé de cryptage" (passphrase, pas de notion d'identifiant) peut être
-            // créée sans login ; tout autre compte (utilisateur/admin) doit en avoir un,
-            // unique parmi les comptes déjà liés à ce provider (retour de Luc).
+        if ($isCryptkey) {
+            // Une "Clé de cryptage" (passphrase, pas de notion d'identifiant) n'a pas de
+            // login — on l'ignore explicitement même si l'interface en a laissé passer un
+            // par erreur, pour ne jamais l'enregistrer sur ce type de compte (retour de Luc).
+            $login = '';
+        } else {
+            // Tout autre compte (utilisateur/admin) doit avoir un identifiant, unique
+            // parmi les comptes déjà liés à ce provider (retour de Luc).
             if ($login === '') {
                 throw new \RuntimeException(__('Identifiant requis.', 'backupgestion'));
             }

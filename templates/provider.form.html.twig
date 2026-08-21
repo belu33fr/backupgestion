@@ -160,14 +160,14 @@
             <label class="col-xxl-4 col-form-label">{{ __('Administrateur', 'backupgestion') }}</label>
             <div class="col-xxl-8">
                 <input type="checkbox" id="bg-accounts-is-admin" class="form-check-input" />
-                <span class="form-text d-inline">{{ __('Change le type de compte en "BackupGestion — Admin compte client Acronis" au lieu du type par défaut configuré dans l\'onglet "Valeurs par défaut".', 'backupgestion') }}</span>
+                <span class="form-text d-inline">{{ __('Force le type en Administration.', 'backupgestion') }}</span>
             </div>
         </div>
         <div class="mb-3 row">
             <label class="col-xxl-4 col-form-label">{{ __('Clé de cryptage', 'backupgestion') }}</label>
             <div class="col-xxl-8">
                 <input type="checkbox" id="bg-accounts-is-cryptkey" class="form-check-input" />
-                <span class="form-text d-inline">{{ __('Change le type de compte en "BackupGestion — Clé de chiffrement sauvegarde" (ex. passphrase d\'un plan de sauvegarde chiffré). Exclusif avec "Administrateur".', 'backupgestion') }}</span>
+                <span class="form-text d-inline">{{ __('Force le type en "Clé de chiffrement". Exclusif avec "Administrateur".', 'backupgestion') }}</span>
             </div>
         </div>
         <div class="mb-3 row">
@@ -218,12 +218,30 @@
 
             var isAdminBox    = document.getElementById('bg-accounts-is-admin');
             var isCryptkeyBox = document.getElementById('bg-accounts-is-cryptkey');
+            var loginInput    = document.getElementById('bg-accounts-login');
+
+            // Une "Clé de cryptage" n'a pas de notion d'identifiant : on vide et on
+            // verrouille le champ tant que la case est cochée, pour éviter qu'une saisie
+            // oubliée ne soit enregistrée sur ce type de compte (retour de Luc).
+            function syncLoginField() {
+                if (loginInput) {
+                    if (isCryptkeyBox.checked) {
+                        loginInput.value = '';
+                        loginInput.disabled = true;
+                    } else {
+                        loginInput.disabled = false;
+                    }
+                }
+            }
+
             if (isAdminBox && isCryptkeyBox) {
                 isAdminBox.addEventListener('change', function() {
                     if (isAdminBox.checked) { isCryptkeyBox.checked = false; }
+                    syncLoginField();
                 });
                 isCryptkeyBox.addEventListener('change', function() {
                     if (isCryptkeyBox.checked) { isAdminBox.checked = false; }
+                    syncLoginField();
                 });
             }
 
@@ -234,13 +252,15 @@
                     postForm(createBtn, resultEl, {
                         create_accounts_admin: '1',
                         id: createBtn.dataset.id,
-                        accounts_login: document.getElementById('bg-accounts-login').value,
+                        accounts_login: loginInput.value,
                         accounts_password: document.getElementById('bg-accounts-password').value,
                         accounts_is_admin: isAdminBox.checked ? '1' : '',
                         accounts_is_cryptkey: isCryptkeyBox.checked ? '1' : '',
                         accounts_key: document.getElementById('bg-accounts-key').value
                     }, function(d, el) {
                         el.innerHTML = "<span class='badge bg-success'>" + {{ __('Compte créé et lié', 'backupgestion')|json_encode|raw }} + " (#" + d.accounts_id + ")</span>";
+                        loginInput.disabled = false;
+                        loginInput.value = '';
                         document.getElementById('bg-accounts-password').value = '';
                         isAdminBox.checked = false;
                         isCryptkeyBox.checked = false;

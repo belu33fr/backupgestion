@@ -19,7 +19,9 @@ class ProviderAccountsDefaults extends CommonGLPI
     public function getTabNameForItem(CommonGLPI $item, $withtemplate = 0)
     {
         if ($item instanceof Provider && ($item->fields['id'] ?? 0)) {
-            return self::createTabEntry(__('Valeurs par défaut', 'backupgestion'));
+            // Icône "table de mixage" (retour de Luc), même convention Tabler que
+            // Provider::getIcon() ('ti ti-*').
+            return self::createTabEntry(__('Valeurs par défaut', 'backupgestion'), 0, null, 'ti ti-adjustments');
         }
         return '';
     }

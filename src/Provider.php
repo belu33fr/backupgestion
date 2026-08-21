@@ -372,6 +372,13 @@ class Provider extends CommonDBTM
             // pas les entités) ne doit plus apparaître si son entité n'est plus visible
             // depuis celle du parent — confirmé par Luc.
             $visibleEntities = self::getDescendantEntityIds((int)$this->fields['entities_id']);
+            if (!in_array(0, $visibleEntities, true)) {
+                // Un tenant enfant découvert automatiquement peut ne pas encore avoir
+                // d'entité validée (entities_id = 0) — il doit rester visible dans la
+                // liste pour pouvoir être rattaché via le transfert rapide, même s'il
+                // n'est pas (encore) une sous-entité du parent (retour de Luc).
+                $visibleEntities[] = 0;
+            }
             foreach ($DB->request([
                 'FROM'  => self::getTable(),
                 'WHERE' => [
@@ -380,8 +387,11 @@ class Provider extends CommonDBTM
                 ],
             ]) as $row) {
                 // Nom complet de l'entité (pas juste son index — retour de Luc), via le
-                // helper standard GLPI (confirmé utilisé par Accounts lui-même).
-                $row['entity_name'] = \Dropdown::getDropdownName('glpi_entities', (int)$row['entities_id']);
+                // helper standard GLPI (confirmé utilisé par Accounts lui-même) — sauf
+                // pour une entité non encore validée (id 0), affichée explicitement.
+                $row['entity_name'] = ((int)$row['entities_id'] === 0)
+                    ? __('(non attribuée)', 'backupgestion')
+                    : \Dropdown::getDropdownName('glpi_entities', (int)$row['entities_id']);
                 $children[]         = $row;
             }
         }
