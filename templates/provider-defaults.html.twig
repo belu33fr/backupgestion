@@ -44,6 +44,7 @@
                         <option value="{{ id }}" {% if item.fields['accounts_accounttype_id'] == id %}selected{% endif %}>{{ name }}</option>
                     {% endfor %}
                 </select>
+                <span class="form-text">{{ __('Utilisé pour la création d\'un compte ordinaire.', 'backupgestion') }}</span>
             </div>
         </div>
 

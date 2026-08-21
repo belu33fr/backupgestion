@@ -25,15 +25,15 @@
             <div class="col-xxl-8">
                 {% if def.type == 'password' %}
                     {# Le vrai secret n'est jamais renvoyé en clair au navigateur, même en
-                       édition (comme le mot de passe DNSManager) — champ toujours vide, avec
-                       readonly-au-chargement pour empêcher Chrome/Firefox de proposer un
-                       identifiant/mot de passe enregistré sur ce champ vide. #}
+                       édition (comme le mot de passe DNSManager) — champ toujours vide.
+                       Pas de "readonly" ici (retour de Luc : ça grise le champ et laisse
+                       croire qu'il n'est pas éditable) — autocomplete/data-*-ignore
+                       suffisent à dissuader Chrome/Firefox de proposer un identifiant
+                       enregistré sur ce champ vide. #}
                     <input type="password"
                            name="cred_{{ key }}"
                            class="form-control"
                            autocomplete="new-password"
-                           readonly
-                           onfocus="this.removeAttribute('readonly')"
                            data-lpignore="true"
                            data-1p-ignore
                            placeholder="{{ hasCredentials[key] is defined ? __('Déjà renseigné — laisser vide pour ne pas modifier', 'backupgestion') : (def.placeholder ?? '') }}" />
@@ -152,7 +152,7 @@
             <label class="col-xxl-4 col-form-label">{{ __('Mot de passe', 'backupgestion') }}</label>
             <div class="col-xxl-8">
                 <input type="password" id="bg-accounts-password" class="form-control"
-                       autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly')"
+                       autocomplete="new-password"
                        data-lpignore="true" data-1p-ignore />
             </div>
         </div>
@@ -174,7 +174,7 @@
             <label class="col-xxl-4 col-form-label">{{ __('Empreinte — clé de chiffrement', 'backupgestion') }}</label>
             <div class="col-xxl-8">
                 <input type="password" id="bg-accounts-key" class="form-control"
-                       autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly')"
+                       autocomplete="new-password"
                        data-lpignore="true" data-1p-ignore
                        placeholder="{{ __('Laisser vide si une clé serveur ou de session est déjà disponible', 'backupgestion') }}" />
             </div>
@@ -301,13 +301,11 @@
                     <td><a href="{{ webdir }}/front/provider.form.php?id={{ child.id }}">{{ child.name }}</a></td>
                     <td>{{ child.entity_name }}</td>
                     <td class="d-flex gap-2 align-items-center">
-                        <input type="text" class="form-control form-control-sm bg-quickmove-filter" data-child-id="{{ child.id }}"
-                               placeholder="{{ __('Filtrer...', 'backupgestion') }}" style="width: 120px;" autocomplete="off" />
-                        <select class="form-select form-select-sm bg-quickmove-entity" data-child-id="{{ child.id }}" style="width: auto;">
-                            {% for eid, ename in allEntities %}
-                                <option value="{{ eid }}" {% if child.entities_id == eid %}selected{% endif %}>{{ ename }}</option>
-                            {% endfor %}
-                        </select>
+                        {# Widget natif GLPI (Dropdown::show), recherche intégrée à la liste
+                           déroulante comme le combo "Utilisateur concerné" (retour de Luc). #}
+                        <span class="bg-quickmove-entity-wrap" data-child-id="{{ child.id }}" data-select-name="quickmove_entity_{{ child.id }}">
+                            {{ child.quickmove_widget|raw }}
+                        </span>
                         <button type="button" class="btn btn-sm btn-outline-secondary bg-btn-quickmove" data-child-id="{{ child.id }}" data-url="{{ webdir }}/front/provider.form.php">
                             {{ __('Déplacer', 'backupgestion') }}
                         </button>
@@ -323,7 +321,7 @@
             var csrf = csrfMeta ? csrfMeta.content : '';
 
             function doMove(btn, childId, extra) {
-                var select   = document.querySelector('.bg-quickmove-entity[data-child-id="' + childId + '"]');
+                var select   = document.querySelector('select[name="quickmove_entity_' + childId + '"]');
                 var resultEl = document.querySelector('.bg-quickmove-result[data-child-id="' + childId + '"]');
                 var body = Object.assign({quick_move_entity: '1', id: childId, entities_id: select.value}, extra || {});
                 btn.disabled = true;
@@ -372,43 +370,6 @@
             document.querySelectorAll('.bg-btn-quickmove').forEach(function(btn) {
                 btn.addEventListener('click', function() {
                     doMove(btn, btn.dataset.childId, {});
-                });
-            });
-
-            // Filtre texte au-dessus du sélecteur d'entité (retour de Luc : liste
-            // potentiellement longue). On garde la liste complète en mémoire et on
-            // reconstruit les <option> filtrées à la volée, sans dépendance externe.
-            document.querySelectorAll('.bg-quickmove-entity').forEach(function(select) {
-                select.dataset.allOptions = JSON.stringify(
-                    Array.prototype.map.call(select.options, function(o) {
-                        return {value: o.value, label: o.textContent, selected: o.selected};
-                    })
-                );
-            });
-            document.querySelectorAll('.bg-quickmove-filter').forEach(function(input) {
-                input.addEventListener('keyup', function() {
-                    var childId = input.dataset.childId;
-                    var select  = document.querySelector('.bg-quickmove-entity[data-child-id="' + childId + '"]');
-                    var all     = JSON.parse(select.dataset.allOptions || '[]');
-                    var q       = input.value.trim().toLowerCase();
-                    var currentValue = select.value;
-                    var matches = q === '' ? all : all.filter(function(o) {
-                        return o.label.toLowerCase().indexOf(q) !== -1;
-                    });
-                    select.innerHTML = '';
-                    matches.forEach(function(o) {
-                        var opt = document.createElement('option');
-                        opt.value = o.value;
-                        opt.textContent = o.label;
-                        select.appendChild(opt);
-                    });
-                    // Conserve la sélection courante si elle reste dans les résultats filtrés,
-                    // sinon sélectionne la première correspondance.
-                    if (matches.some(function(o) { return o.value === currentValue; })) {
-                        select.value = currentValue;
-                    } else if (matches.length) {
-                        select.value = matches[0].value;
-                    }
                 });
             });
         })();

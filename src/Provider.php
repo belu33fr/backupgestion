@@ -385,6 +385,7 @@ class Provider extends CommonDBTM
                     'backupgestion_providers_id_parent' => $this->fields['id'],
                     'entities_id'                        => $visibleEntities,
                 ],
+                'ORDER' => 'name ASC',
             ]) as $row) {
                 // Nom complet de l'entité (pas juste son index — retour de Luc), via le
                 // helper standard GLPI (confirmé utilisé par Accounts lui-même) — sauf
@@ -392,16 +393,23 @@ class Provider extends CommonDBTM
                 $row['entity_name'] = ((int)$row['entities_id'] === 0)
                     ? __('(non attribuée)', 'backupgestion')
                     : \Dropdown::getDropdownName('glpi_entities', (int)$row['entities_id']);
-                $children[]         = $row;
-            }
-        }
 
-        // Liste plate de toutes les entités (id => nom complet), pour le sélecteur de
-        // déplacement rapide sur les sous-tenants (retour de Luc — éviter le transfert
-        // d'entité complet juste pour rattacher un tenant enfant).
-        $allEntities = [];
-        foreach ($DB->request(['FROM' => 'glpi_entities', 'SELECT' => ['id', 'completename'], 'ORDER' => 'completename ASC']) as $row) {
-            $allEntities[(int)$row['id']] = $row['completename'];
+                // Sélecteur de déplacement rapide (retour de Luc — éviter le transfert
+                // d'entité complet juste pour rattacher un tenant enfant) : on réutilise
+                // le widget natif GLPI (Dropdown::show, recherche intégrée à la liste
+                // déroulante) — même mécanisme et même ergonomie que le combo "Utilisateur
+                // concerné" de l'onglet "Valeurs par défaut", plutôt qu'une zone de
+                // filtre reconstruite à la main.
+                $row['quickmove_widget'] = \Dropdown::show('Entity', [
+                    'name'    => 'quickmove_entity_' . $row['id'],
+                    'value'   => (int)$row['entities_id'],
+                    'width'   => '220px',
+                    'rand'    => mt_rand(),
+                    'display' => false,
+                ]);
+
+                $children[] = $row;
+            }
         }
 
         // Zone "bonus" — ne doit jamais empêcher l'affichage de la fiche : toute erreur
@@ -424,7 +432,6 @@ class Provider extends CommonDBTM
                 'hasCredentials'       => $hasCredentials,
                 'prefillValues'        => $prefillValues,
                 'children'             => $children,
-                'allEntities'          => $allEntities,
                 'webdir'               => Plugin::getWebDir('backupgestion'),
                 'accountsAvailable'    => $accountsAvailable,
                 'accountsHashId'       => (int)($this->fields['accounts_hash_id'] ?? 0),
