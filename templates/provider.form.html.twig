@@ -294,26 +294,31 @@
     {% if children|length %}
         {{ fields.smallTitle(__('Sous-tenants rattachés', 'backupgestion')) }}
         <table class="table table-sm">
+            {# Largeurs fixes par colonne (retour de Luc) : "Nom" à 30%, "Entité" prend
+               le reste, "Déplacer" a une largeur fixe suffisante pour ne jamais forcer
+               le retour à la ligne des boutons "i"/"+" du combo natif. #}
+            <colgroup>
+                <col style="width: 30%;">
+                <col>
+                <col style="width: 130px;">
+            </colgroup>
             <thead><tr><th>{{ __('Nom') }}</th><th>{{ __('Entité') }}</th><th></th></tr></thead>
             <tbody>
             {% for child in children %}
                 <tr>
                     <td><a href="{{ webdir }}/front/provider.form.php?id={{ child.id }}">{{ child.name }}</a></td>
-                    <td style="width: 1%;" class="text-nowrap">
+                    <td>
                         {# Widget natif GLPI (Dropdown::show), recherche intégrée à la liste
                            déroulante comme le combo "Utilisateur concerné" (retour de Luc) —
                            reflète l'entité actuelle par défaut, ses propres boutons ("i"
                            commentaire, "+" ajout d'entité) restent utilisables normalement
-                           puisque "Déplacer" a sa propre colonne, sans jamais les recouvrir
-                           (retour de Luc — un clic mal placé ouvrait la gestion des entités).
-                           Colonne en "width: 1%" (ne prend que la largeur de son contenu) pour
-                           que "Déplacer" reste collé juste à côté, plus facile à suivre visuellement
-                           (retour de Luc). #}
+                           puisque "Déplacer" a sa propre colonne à largeur fixe, sans jamais
+                           les recouvrir ni les faire passer à la ligne (retour de Luc). #}
                         <span class="bg-quickmove-entity-wrap" data-child-id="{{ child.id }}" data-select-name="quickmove_entity_{{ child.id }}" title="{{ child.entity_name }}">
                             {{ child.quickmove_widget|raw }}
                         </span>
                     </td>
-                    <td style="width: 1%;" class="text-nowrap d-flex flex-wrap gap-2 align-items-center">
+                    <td class="d-flex flex-wrap gap-2 align-items-center">
                         <button type="button" class="btn btn-sm btn-outline-secondary bg-btn-quickmove" data-child-id="{{ child.id }}" data-url="{{ webdir }}/front/provider.form.php">
                             {{ __('Déplacer', 'backupgestion') }}
                         </button>
