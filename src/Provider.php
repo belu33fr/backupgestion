@@ -323,7 +323,11 @@ class Provider extends CommonDBTM
 
     public static function getTypeName($nb = 0): string
     {
-        return _n('Provider', 'Providers', $nb, 'backupgestion');
+        // "Provider" seul seul est ambigu — d'autres plugins peuvent enregistrer un
+        // type portant le même nom générique, notamment dans la liste "Ajouter un
+        // élément" d'Accounts (retour de Luc). _n() reste utilisé (traductible si un
+        // jour une chaîne française dédiée est ajoutée au domaine 'backupgestion').
+        return _n('Provider Sauvegarde', 'Providers Sauvegarde', $nb, 'backupgestion');
     }
 
     public static function getTable($classname = null): string
