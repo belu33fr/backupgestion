@@ -127,6 +127,21 @@ class Credential extends CommonDBTM
         ])->count() > 0;
     }
 
+    /**
+     * Existence d'une clé précise (ex. "datacenter_url") pour un provider — utilisé
+     * pour valider les champs requis sans redéchiffrer (retour de Luc : un champ
+     * requis laissé vide, avec seulement un placeholder à l'écran, s'enregistrait
+     * silencieusement vide).
+     */
+    public static function existsKeyForProvider(int $providerId, string $key): bool
+    {
+        global $DB;
+        return $DB->request([
+            'FROM'  => self::getTable(),
+            'WHERE' => ['providers_id' => $providerId, 'cred_key' => $key],
+        ])->count() > 0;
+    }
+
     // ------------------------------------------------------------------
     // Chiffrement AES-256-CBC
     // ------------------------------------------------------------------

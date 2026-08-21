@@ -132,6 +132,49 @@ class Provider extends CommonDBTM
         Credential::deleteForProvider((int)$this->fields['id']);
     }
 
+    /**
+     * Traite les enfants directs avant suppression/purge d'un provider (CDC —
+     * scénario de recette 18) :
+     *   - enfant "indépendant" (a ses propres identifiants API locaux) : préservé,
+     *     seul le lien de parenté est retiré (sinon il resterait rattaché à un ID
+     *     de provider qui n'existe plus — bug remonté par Luc) ;
+     *   - enfant "dépendant" (aucun identifiant propre, simple héritage de la
+     *     hiérarchie découverte) : supprimé en cascade, via ce même delete()
+     *     surchargé — s'applique donc récursivement à ses propres enfants.
+     * Ne touche jamais aux comptes Accounts (catégorie b), quelle que soit la
+     * circonstance (CDC 3.3/4.4), ici comme ailleurs dans cette classe.
+     */
+    private function cascadeChildrenOnRemoval(int $parentId, bool $purge): void
+    {
+        global $DB;
+
+        foreach ($DB->request([
+            'FROM'  => self::getTable(),
+            'WHERE' => ['backupgestion_providers_id_parent' => $parentId],
+        ]) as $row) {
+            $childId = (int)$row['id'];
+            $child   = new self();
+            if (!$child->getFromDB($childId)) {
+                continue;
+            }
+
+            if (Credential::existsForProvider($childId)) {
+                $child->update(['id' => $childId, 'backupgestion_providers_id_parent' => 0]);
+            } else {
+                $child->delete(['id' => $childId], $purge ? 1 : 0);
+            }
+        }
+    }
+
+    public function delete(array $input, $force = 0, $history = true)
+    {
+        $id = (int)($input['id'] ?? $this->fields['id'] ?? 0);
+        if ($id > 0) {
+            $this->cascadeChildrenOnRemoval($id, (bool)$force);
+        }
+        return parent::delete($input, $force, $history);
+    }
+
     // ------------------------------------------------------------------
     // Hiérarchie des tenants (CDC 4.2 ter) — découverte manuelle (bouton sur la
     // fiche). La tâche périodique équivalente (CDC 4.7) arrive au jalon 3.
@@ -384,6 +427,9 @@ class Provider extends CommonDBTM
                 'WHERE' => [
                     'backupgestion_providers_id_parent' => $this->fields['id'],
                     'entities_id'                        => $visibleEntities,
+                    // Un enfant mis à la corbeille (is_deleted) ne doit plus apparaître
+                    // comme sous-tenant actif.
+                    'is_deleted'                          => 0,
                 ],
                 'ORDER' => 'name ASC',
             ]) as $row) {

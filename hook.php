@@ -157,6 +157,12 @@ function plugin_backupgestion_migrate(): void
             // tourné — retour de Luc). accounts_accounttype_id reste le type "utilisateur".
             'accounts_accounttype_admin_id'      => "ALTER TABLE `$providerTable` ADD COLUMN `accounts_accounttype_admin_id` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `accounts_is_helpdesk_visible`",
             'accounts_accounttype_cryptkey_id'   => "ALTER TABLE `$providerTable` ADD COLUMN `accounts_accounttype_cryptkey_id` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `accounts_accounttype_admin_id`",
+
+            // v0.5.0 — corbeille GLPI standard (is_deleted). Sans cette colonne,
+            // CommonDBTM::maybeDeleted() est faux et delete() se comporte toujours
+            // comme une purge définitive, quel que soit le bouton cliqué — jamais de
+            // mise à la corbeille possible (constaté et bien diagnostiqué par Luc).
+            'is_deleted'                          => "ALTER TABLE `$providerTable` ADD COLUMN `is_deleted` TINYINT(1) NOT NULL DEFAULT 0 AFTER `accounts_accounttype_cryptkey_id`",
         ];
         foreach ($cols as $col => $sql) {
             if (!$DB->fieldExists($providerTable, $col)) {
@@ -168,6 +174,7 @@ function plugin_backupgestion_migrate(): void
         $indexes = [
             'backupgestion_providers_id_parent' => "ALTER TABLE `$providerTable` ADD INDEX `backupgestion_providers_id_parent` (`backupgestion_providers_id_parent`)",
             'acronis_tenant_id'                  => "ALTER TABLE `$providerTable` ADD INDEX `acronis_tenant_id` (`acronis_tenant_id`)",
+            'is_deleted'                          => "ALTER TABLE `$providerTable` ADD INDEX `is_deleted` (`is_deleted`)",
         ];
         foreach ($indexes as $col => $sql) {
             $exists = $DB->request([

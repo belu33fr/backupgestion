@@ -33,6 +33,32 @@ function backupgestion_extract_credentials(array &$input): array
     return $credentials;
 }
 
+/**
+ * Champs requis (ex. URL du datacenter) manquants : ni saisis dans cette soumission,
+ * ni déjà enregistrés pour ce provider (edit) — retour de Luc : ces champs n'affichent
+ * qu'un placeholder (texte grisé), pas une vraie valeur ; les laisser vides les
+ * enregistrait silencieusement vides, sans erreur.
+ *
+ * @return string[] Libellés des champs requis manquants (vide = rien à signaler).
+ */
+function backupgestion_missing_required_credentials(array $credentials, int $providerId): array
+{
+    $missing = [];
+    foreach (ProviderFactory::getCredentialFields('acronis') as $key => $def) {
+        if (empty($def['required'])) {
+            continue;
+        }
+        if (!empty($credentials[$key])) {
+            continue;
+        }
+        if ($providerId > 0 && Credential::existsKeyForProvider($providerId, $key)) {
+            continue;
+        }
+        $missing[] = $def['label'];
+    }
+    return $missing;
+}
+
 if (isset($_POST['quick_move_entity'])) {
     // Rattachement rapide d'un sous-tenant à une autre entité, sans passer par le
     // transfert d'entité complet de GLPI (retour de Luc — fluidité). Passe par
@@ -190,6 +216,16 @@ if (isset($_POST['quick_move_entity'])) {
     unset($input['add']);
     $credentials = backupgestion_extract_credentials($input);
 
+    $missing = backupgestion_missing_required_credentials($credentials, 0);
+    if (!empty($missing)) {
+        Session::addMessageAfterRedirect(
+            sprintf(__('Création refusée : champ(s) requis manquant(s) — %s.', 'backupgestion'), implode(', ', $missing)),
+            false,
+            ERROR
+        );
+        Html::back();
+    }
+
     $provider->check(-1, CREATE, $input);
     $newID = $provider->add($input);
     if ($newID && !empty($credentials)) {
@@ -206,6 +242,16 @@ if (isset($_POST['quick_move_entity'])) {
     $id    = (int)$_POST['id'];
     $input = $_POST;
     $credentials = backupgestion_extract_credentials($input);
+
+    $missing = backupgestion_missing_required_credentials($credentials, $id);
+    if (!empty($missing)) {
+        Session::addMessageAfterRedirect(
+            sprintf(__('Modification refusée : champ(s) requis manquant(s) — %s.', 'backupgestion'), implode(', ', $missing)),
+            false,
+            ERROR
+        );
+        Html::back();
+    }
 
     $provider->check($id, UPDATE);
     if ($provider->update($input) && !empty($credentials)) {
