@@ -299,18 +299,20 @@
             {% for child in children %}
                 <tr>
                     <td><a href="{{ webdir }}/front/provider.form.php?id={{ child.id }}">{{ child.name }}</a></td>
-                    <td>{{ child.entity_name }}</td>
-                    <td class="d-flex flex-wrap gap-2 align-items-center">
+                    <td>
                         {# Widget natif GLPI (Dropdown::show), recherche intégrée à la liste
-                           déroulante comme le combo "Utilisateur concerné" (retour de Luc).
-                           On garde ses propres boutons ("i" commentaire, "+" ajout d'entité)
-                           intacts et on décale notre bouton "Déplacer" pour ne jamais les
+                           déroulante comme le combo "Utilisateur concerné" (retour de Luc) —
+                           reflète l'entité actuelle par défaut, ses propres boutons ("i"
+                           commentaire, "+" ajout d'entité) restent utilisables normalement
+                           puisque "Déplacer" a maintenant sa propre colonne, sans jamais les
                            recouvrir (retour de Luc — un clic mal placé ouvrait la gestion
                            des entités). #}
-                        <span class="bg-quickmove-entity-wrap flex-shrink-0" data-child-id="{{ child.id }}" data-select-name="quickmove_entity_{{ child.id }}">
+                        <span class="bg-quickmove-entity-wrap" data-child-id="{{ child.id }}" data-select-name="quickmove_entity_{{ child.id }}" title="{{ child.entity_name }}">
                             {{ child.quickmove_widget|raw }}
                         </span>
-                        <button type="button" class="btn btn-sm btn-outline-secondary bg-btn-quickmove ms-3" data-child-id="{{ child.id }}" data-url="{{ webdir }}/front/provider.form.php">
+                    </td>
+                    <td class="d-flex flex-wrap gap-2 align-items-center">
+                        <button type="button" class="btn btn-sm btn-outline-secondary bg-btn-quickmove" data-child-id="{{ child.id }}" data-url="{{ webdir }}/front/provider.form.php">
                             {{ __('Déplacer', 'backupgestion') }}
                         </button>
                         <span class="bg-quickmove-result" data-child-id="{{ child.id }}"></span>
