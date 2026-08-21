@@ -112,9 +112,10 @@
                         function(d, el) {
                             var msg = (d.found || 0) + ' ' + {{ __('trouvé(s)', 'backupgestion')|json_encode|raw }}
                                 + ' — ' + (d.created || 0) + ' ' + {{ __('créé(s)', 'backupgestion')|json_encode|raw }}
-                                + ', ' + (d.updated || 0) + ' ' + {{ __('mis à jour', 'backupgestion')|json_encode|raw }};
+                                + ', ' + (d.updated || 0) + ' ' + {{ __('mis à jour', 'backupgestion')|json_encode|raw }}
+                                + ', ' + (d.restored || 0) + ' ' + {{ __('restauré(s) de la corbeille', 'backupgestion')|json_encode|raw }};
                             el.innerHTML = "<span class='badge bg-success'>" + msg + "</span>";
-                            if ((d.created || 0) > 0) {
+                            if ((d.created || 0) > 0 || (d.restored || 0) > 0) {
                                 setTimeout(function() { window.location.reload(); }, 1500);
                             }
                         }
@@ -314,7 +315,10 @@
                            commentaire, "+" ajout d'entité) restent utilisables normalement
                            puisque "Déplacer" a sa propre colonne à largeur fixe, sans jamais
                            les recouvrir ni les faire passer à la ligne (retour de Luc). #}
-                        <span class="bg-quickmove-entity-wrap" data-child-id="{{ child.id }}" data-select-name="quickmove_entity_{{ child.id }}" title="{{ child.entity_name }}">
+                        {# "d-block" — un <span> reste inline par défaut : sans ça, le
+                           "width: 100%" passé à Dropdown::show n'a rien de concret contre
+                           quoi se calculer et le combo ne s'élargit pas. #}
+                        <span class="bg-quickmove-entity-wrap d-block" data-child-id="{{ child.id }}" data-select-name="quickmove_entity_{{ child.id }}" title="{{ child.entity_name }}">
                             {{ child.quickmove_widget|raw }}
                         </span>
                     </td>

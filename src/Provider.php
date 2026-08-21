@@ -190,6 +190,8 @@ class Provider extends CommonDBTM
      */
     public function discoverChildren(): array
     {
+        global $DB;
+
         $id = (int)$this->fields['id'];
 
         $key         = KeyDerivation::deriveKey($this->fields);
@@ -207,9 +209,10 @@ class Provider extends CommonDBTM
             $this->update(['id' => $id, 'acronis_tenant_id' => $result['tenant_id']]);
         }
 
-        $created = 0;
-        $updated = 0;
-        $skipped = 0;
+        $created  = 0;
+        $updated  = 0;
+        $skipped  = 0;
+        $restored = 0;
 
         foreach ($result['children'] as $child) {
             $childTenantId = (string)($child['id'] ?? '');
@@ -218,10 +221,17 @@ class Provider extends CommonDBTM
                 continue;
             }
 
-            $existing = new self();
-            $found    = $existing->getFromDBByCrit(['acronis_tenant_id' => $childTenantId]);
+            // Recherche directe en base (sans passer par getFromDBByCrit) pour retrouver
+            // un tenant déjà connu même s'il est actuellement à la corbeille — sinon il
+            // ne serait jamais retrouvé (selon le filtrage implicite appliqué aux lectures
+            // une fois is_deleted présent sur la table) et un doublon "visible" serait créé
+            // à côté de l'original toujours dans la corbeille (retour de Luc).
+            $existingRow = $DB->request([
+                'FROM'  => self::getTable(),
+                'WHERE' => ['acronis_tenant_id' => $childTenantId],
+            ])->current();
 
-            if (!$found) {
+            if (!$existingRow) {
                 $newInput = [
                     'name'                               => $childName,
                     'entities_id'                         => $this->fields['entities_id'],
@@ -231,11 +241,23 @@ class Provider extends CommonDBTM
                     'backupgestion_providers_id_parent'    => $id,
                     'comment'                               => sprintf(__('Découvert automatiquement le %s depuis "%s".', 'backupgestion'), date('Y-m-d H:i'), $this->fields['name']),
                 ];
-                $newID = $existing->add($newInput);
+                $existing = new self();
+                $newID    = $existing->add($newInput);
                 if ($newID) {
                     $created++;
                 }
                 continue;
+            }
+
+            $existing = new self();
+            $existing->getFromDB((int)$existingRow['id']);
+
+            // Un tenant retrouvé bien vivant côté Acronis ne doit plus rester à la
+            // corbeille : sa présence dans ce scan prouve qu'il existe toujours
+            // réellement chez le fournisseur (retour de Luc).
+            if (!empty($existing->fields['is_deleted'])) {
+                $existing->restore(['id' => $existing->fields['id']]);
+                $restored++;
             }
 
             // Provider déjà connu pour ce tenant réel : ne re-parenter que s'il n'a pas
@@ -252,7 +274,7 @@ class Provider extends CommonDBTM
             if (!empty($changes)) {
                 $existing->update(array_merge(['id' => $existing->fields['id']], $changes));
                 $updated++;
-            } else {
+            } elseif (empty($existingRow['is_deleted'])) {
                 $skipped++;
             }
         }
@@ -262,6 +284,7 @@ class Provider extends CommonDBTM
             'found'     => count($result['children']),
             'created'   => $created,
             'updated'   => $updated,
+            'restored'  => $restored,
             'skipped'   => $skipped,
         ];
     }
@@ -449,7 +472,10 @@ class Provider extends CommonDBTM
                 $row['quickmove_widget'] = \Dropdown::show('Entity', [
                     'name'    => 'quickmove_entity_' . $row['id'],
                     'value'   => (int)$row['entities_id'],
-                    'width'   => '220px',
+                    // Largeur relative (retour de Luc : en pixels fixes, le combo ne
+                    // remplissait qu'environ 20% de la colonne "Entité") — occupe toute
+                    // la largeur disponible de sa colonne, elle-même désormais flexible.
+                    'width'   => '100%',
                     'rand'    => mt_rand(),
                     'display' => false,
                 ]);
