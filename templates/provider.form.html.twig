@@ -6,16 +6,21 @@
     {# Nom, entité, sous-entités et commentaire sont des champs CommonDBTM standards
        déjà rendus par generic_show_form.html.twig. #}
 
-    <input type="hidden" name="provider_type" value="acronis" />
-
     <div class="mb-3 row">
-        <label class="col-xxl-4 col-form-label">{{ __('Type de provider', 'backupgestion') }}</label>
+        <label class="col-xxl-4 col-form-label">{{ __('Type de fournisseur de sauvegarde', 'backupgestion') }}</label>
         <div class="col-xxl-8">
-            <div class="form-control-plaintext">{{ providerLabel }}</div>
+            {# Combo prête pour de futurs fournisseurs (retour de Luc) — un seul choix
+               aujourd'hui ("Acronis Cyber Protect Cloud"), présélectionné par défaut,
+               mais ProviderFactory est déjà structuré pour en accueillir d'autres. #}
+            <select name="provider_type" class="form-select">
+                {% for type, label in availableProviders %}
+                    <option value="{{ type }}" {% if (item.fields['provider_type'] ?? 'acronis') == type %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
         </div>
     </div>
 
-    {{ fields.smallTitle(__('Identifiants API (chiffrés localement, jamais dans Accounts)', 'backupgestion')) }}
+    {{ fields.smallTitle(__("Identifiants API permettant d'accéder au fournisseur de sauvegarde", 'backupgestion')) }}
 
     {% for key, def in credentialFields %}
         <div class="mb-3 row">

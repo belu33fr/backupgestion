@@ -323,11 +323,10 @@ class Provider extends CommonDBTM
 
     public static function getTypeName($nb = 0): string
     {
-        // "Provider" seul seul est ambigu — d'autres plugins peuvent enregistrer un
-        // type portant le même nom générique, notamment dans la liste "Ajouter un
-        // élément" d'Accounts (retour de Luc). _n() reste utilisé (traductible si un
-        // jour une chaîne française dédiée est ajoutée au domaine 'backupgestion').
-        return _n('Provider Sauvegarde', 'Providers Sauvegarde', $nb, 'backupgestion');
+        // "Provider" seul est ambigu — d'autres plugins peuvent enregistrer un type
+        // portant le même nom générique, notamment dans la liste "Ajouter un élément"
+        // d'Accounts. Entièrement en français (retour de Luc).
+        return _n('Fournisseur de sauvegarde', 'Fournisseurs de sauvegarde', $nb, 'backupgestion');
     }
 
     public static function getTable($classname = null): string
@@ -504,6 +503,7 @@ class Provider extends CommonDBTM
                 'item'                 => $this,
                 'params'               => $options,
                 'providerLabel'        => ProviderFactory::getAvailableProviders()['acronis'] ?? 'Acronis',
+                'availableProviders'   => ProviderFactory::getAvailableProviders(),
                 'credentialFields'     => ProviderFactory::getCredentialFields('acronis'),
                 'hasCredentials'       => $hasCredentials,
                 'prefillValues'        => $prefillValues,
