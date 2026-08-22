@@ -57,6 +57,9 @@ class ProviderAccountsDefaults extends CommonGLPI
                 'accountsHashes'    => $accountsHashes,
                 'accountsTypes'     => $accountsTypes,
                 'accountsStates'    => $accountsStates,
+                // Masque le bouton "Enregistrer" pour un profil en lecture seule
+                // (retour de Luc — consultation possible, modification bloquée).
+                'canUpdate'         => Provider::canUpdate(),
             ]
         );
 

@@ -511,6 +511,11 @@ class Provider extends CommonDBTM
                 'webdir'               => Plugin::getWebDir('backupgestion'),
                 'accountsAvailable'    => $accountsAvailable,
                 'accountsHashId'       => (int)($this->fields['accounts_hash_id'] ?? 0),
+                // Masque les actions d'écriture (découverte, création de compte,
+                // transfert rapide) pour un profil en lecture seule (ex. Observateur) —
+                // le serveur les bloque déjà, mais les laisser visibles pour rien
+                // n'aboutir est trompeur (retour de Luc).
+                'canUpdate'            => self::canUpdate(),
             ]
         );
 

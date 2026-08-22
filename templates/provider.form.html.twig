@@ -58,12 +58,14 @@
             </button>
             <span id="bg-test-result"></span>
         </div>
-        <div class="col-12 mb-3 d-flex gap-2 flex-wrap align-items-center">
-            <button type="button" id="bg-btn-discover" class="btn btn-secondary" data-id="{{ item.fields['id'] }}" data-url="{{ webdir }}/front/provider.form.php">
-                <i class="ti ti-hierarchy-2 me-1"></i>{{ __('Découvrir les tenants enfants', 'backupgestion') }}
-            </button>
-            <span id="bg-discover-result"></span>
-        </div>
+        {% if canUpdate %}
+            <div class="col-12 mb-3 d-flex gap-2 flex-wrap align-items-center">
+                <button type="button" id="bg-btn-discover" class="btn btn-secondary" data-id="{{ item.fields['id'] }}" data-url="{{ webdir }}/front/provider.form.php">
+                    <i class="ti ti-hierarchy-2 me-1"></i>{{ __('Découvrir les tenants enfants', 'backupgestion') }}
+                </button>
+                <span id="bg-discover-result"></span>
+            </div>
+        {% endif %}
         <script>
         (function() {
             var csrfMeta = document.querySelector("meta[property='glpi:csrf_token']");
@@ -135,7 +137,7 @@
        désormais dans leur propre onglet "Valeurs par défaut" (clarté de l'interface,
        retour de Luc) — voir ProviderAccountsDefaults. #}
 
-    {% if accountsAvailable and item.fields['id'] %}
+    {% if accountsAvailable and item.fields['id'] and canUpdate %}
         {{ fields.smallTitle(__('Créer un compte utilisateur', 'backupgestion')) }}
 
         <div class="alert alert-info">
@@ -285,6 +287,13 @@
             }
         })();
         </script>
+    {% elseif accountsAvailable and item.fields['id'] %}
+        {# Consultation possible, création/modification bloquée pour un profil en
+           lecture seule (ex. Observateur, CDC scénario 12) — retour de Luc. #}
+        <div class="alert alert-secondary mt-2">
+            <i class="ti ti-lock me-2"></i>
+            {{ __('Droits insuffisants pour créer un compte.', 'backupgestion') }}
+        </div>
     {% elseif accountsAvailable %}
         <div class="alert alert-info mt-2">
             <i class="ti ti-info-circle me-2"></i>
@@ -309,24 +318,32 @@
                 <tr>
                     <td><a href="{{ webdir }}/front/provider.form.php?id={{ child.id }}">{{ child.name }}</a></td>
                     <td>
-                        {# Widget natif GLPI (Dropdown::show), recherche intégrée à la liste
-                           déroulante comme le combo "Utilisateur concerné" (retour de Luc) —
-                           reflète l'entité actuelle par défaut, ses propres boutons ("i"
-                           commentaire, "+" ajout d'entité) restent utilisables normalement
-                           puisque "Déplacer" a sa propre colonne à largeur fixe, sans jamais
-                           les recouvrir ni les faire passer à la ligne (retour de Luc). #}
-                        {# "d-block" — un <span> reste inline par défaut : sans ça, le
-                           "width: 100%" passé à Dropdown::show n'a rien de concret contre
-                           quoi se calculer et le combo ne s'élargit pas. #}
-                        <span class="bg-quickmove-entity-wrap d-block" data-child-id="{{ child.id }}" data-select-name="quickmove_entity_{{ child.id }}" title="{{ child.entity_name }}">
-                            {{ child.quickmove_widget|raw }}
-                        </span>
+                        {% if canUpdate %}
+                            {# Widget natif GLPI (Dropdown::show), recherche intégrée à la liste
+                               déroulante comme le combo "Utilisateur concerné" (retour de Luc) —
+                               reflète l'entité actuelle par défaut, ses propres boutons ("i"
+                               commentaire, "+" ajout d'entité) restent utilisables normalement
+                               puisque "Déplacer" a sa propre colonne à largeur fixe, sans jamais
+                               les recouvrir ni les faire passer à la ligne (retour de Luc). #}
+                            {# "d-block" — un <span> reste inline par défaut : sans ça, le
+                               "width: 100%" passé à Dropdown::show n'a rien de concret contre
+                               quoi se calculer et le combo ne s'élargit pas. #}
+                            <span class="bg-quickmove-entity-wrap d-block" data-child-id="{{ child.id }}" data-select-name="quickmove_entity_{{ child.id }}" title="{{ child.entity_name }}">
+                                {{ child.quickmove_widget|raw }}
+                            </span>
+                        {% else %}
+                            {# Lecture seule (ex. Observateur) : pas de combo éditable, juste
+                               le nom complet de l'entité (retour de Luc). #}
+                            {{ child.entity_name }}
+                        {% endif %}
                     </td>
                     <td class="d-flex flex-wrap gap-2 align-items-center">
-                        <button type="button" class="btn btn-sm btn-outline-secondary bg-btn-quickmove" data-child-id="{{ child.id }}" data-url="{{ webdir }}/front/provider.form.php">
-                            {{ __('Déplacer', 'backupgestion') }}
-                        </button>
-                        <span class="bg-quickmove-result" data-child-id="{{ child.id }}"></span>
+                        {% if canUpdate %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary bg-btn-quickmove" data-child-id="{{ child.id }}" data-url="{{ webdir }}/front/provider.form.php">
+                                {{ __('Déplacer', 'backupgestion') }}
+                            </button>
+                            <span class="bg-quickmove-result" data-child-id="{{ child.id }}"></span>
+                        {% endif %}
                     </td>
                 </tr>
             {% endfor %}
