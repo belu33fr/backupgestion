@@ -206,6 +206,113 @@ function plugin_backupgestion_migrate(): void
         ");
     }
 
+    // Jalon 3 (CDC 2.1/4.7) — espaces de stockage (objets GLPI persistés, multi-backend),
+    // liaison stockage <-> comptes Accounts, rattachement léger appareil/stockage <->
+    // équipement GLPI (pas de mirroir), et journal de la tâche périodique de détection.
+    $storageTable = \GlpiPlugin\Backupgestion\StorageSpace::getTable();
+    if (!$DB->tableExists($storageTable)) {
+        $DB->doQuery("
+            CREATE TABLE `$storageTable` (
+                `id`                          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `name`                        VARCHAR(255) NOT NULL DEFAULT '',
+                `entities_id`                 INT UNSIGNED NOT NULL DEFAULT 0,
+                `is_recursive`                TINYINT(1) NOT NULL DEFAULT 0,
+                `comment`                     TEXT,
+                `storage_type`                VARCHAR(50) NOT NULL DEFAULT '',
+                `connection_params`           TEXT,
+                `backupgestion_providers_id`  INT UNSIGNED NOT NULL DEFAULT 0,
+                `provider_ref`                VARCHAR(255) NOT NULL DEFAULT '',
+                `acronis_tenant_id`           VARCHAR(255) NOT NULL DEFAULT '',
+                `itemtype`                    VARCHAR(100) NOT NULL DEFAULT '',
+                `items_id`                    INT UNSIGNED NOT NULL DEFAULT 0,
+                `key_salt`                    VARCHAR(255) NOT NULL DEFAULT '',
+                `users_id_keyowner`           INT UNSIGNED NOT NULL DEFAULT 0,
+                `keyowner_name`               VARCHAR(255) NOT NULL DEFAULT '',
+                `keyowner_email`              VARCHAR(255) NOT NULL DEFAULT '',
+                `entity_name_snapshot`        VARCHAR(255) NOT NULL DEFAULT '',
+                `is_deleted`                  TINYINT(1) NOT NULL DEFAULT 0,
+                `date_creation`               DATETIME DEFAULT NULL,
+                `date_mod`                    DATETIME DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                KEY `name` (`name`),
+                KEY `entities_id` (`entities_id`),
+                KEY `is_recursive` (`is_recursive`),
+                KEY `backupgestion_providers_id` (`backupgestion_providers_id`),
+                KEY `item` (`itemtype`, `items_id`),
+                KEY `acronis_tenant_id` (`acronis_tenant_id`),
+                KEY `is_deleted` (`is_deleted`)
+            ) ENGINE=InnoDB
+            DEFAULT CHARSET={$default_charset}
+            COLLATE={$default_collation}
+        ");
+    }
+
+    $storageAccountsTable = \GlpiPlugin\Backupgestion\StorageAccount::getTable();
+    if (!$DB->tableExists($storageAccountsTable)) {
+        $DB->doQuery("
+            CREATE TABLE `$storageAccountsTable` (
+                `id`                          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `backupgestion_storages_id`   INT UNSIGNED NOT NULL,
+                `role`                        VARCHAR(50) NOT NULL DEFAULT '',
+                `plugin_accounts_accounts_id` INT UNSIGNED NOT NULL DEFAULT 0,
+                `date_creation`               DATETIME DEFAULT NULL,
+                `date_mod`                    DATETIME DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                KEY `backupgestion_storages_id` (`backupgestion_storages_id`),
+                UNIQUE KEY `uniq_storage_role_account` (`backupgestion_storages_id`, `role`, `plugin_accounts_accounts_id`)
+            ) ENGINE=InnoDB
+            DEFAULT CHARSET={$default_charset}
+            COLLATE={$default_collation}
+        ");
+    }
+
+    // Rattachement léger (CDC 2.1) : aucune donnée descriptive mirrorée, seul le résultat
+    // du rattachement est persisté — dédupliqué par identité réelle du tenant/élément côté
+    // Acronis (acronis_tenant_id + provider_ref), jamais par providers_id local (CDC 4.2 ter).
+    $deviceLinksTable = \GlpiPlugin\Backupgestion\DeviceLink::getTable();
+    if (!$DB->tableExists($deviceLinksTable)) {
+        $DB->doQuery("
+            CREATE TABLE `$deviceLinksTable` (
+                `id`                INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `acronis_tenant_id` VARCHAR(255) NOT NULL DEFAULT '',
+                `provider_ref`      VARCHAR(255) NOT NULL DEFAULT '',
+                `itemtype`          VARCHAR(100) NOT NULL DEFAULT '',
+                `items_id`          INT UNSIGNED NOT NULL DEFAULT 0,
+                `match_status`      VARCHAR(50) NOT NULL DEFAULT 'pending',
+                `last_checked_at`   DATETIME DEFAULT NULL,
+                `date_creation`     DATETIME DEFAULT NULL,
+                `date_mod`          DATETIME DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `uniq_tenant_ref` (`acronis_tenant_id`, `provider_ref`),
+                KEY `item` (`itemtype`, `items_id`),
+                KEY `match_status` (`match_status`)
+            ) ENGINE=InnoDB
+            DEFAULT CHARSET={$default_charset}
+            COLLATE={$default_collation}
+        ");
+    }
+
+    $discoveryLogsTable = \GlpiPlugin\Backupgestion\DiscoveryLog::getTable();
+    if (!$DB->tableExists($discoveryLogsTable)) {
+        $DB->doQuery("
+            CREATE TABLE `$discoveryLogsTable` (
+                `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `providers_id`  INT UNSIGNED NOT NULL DEFAULT 0,
+                `status`        VARCHAR(50) NOT NULL DEFAULT '',
+                `found`         INT UNSIGNED NOT NULL DEFAULT 0,
+                `matched`       INT UNSIGNED NOT NULL DEFAULT 0,
+                `pending`       INT UNSIGNED NOT NULL DEFAULT 0,
+                `errors`        TEXT,
+                `date_creation` DATETIME DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                KEY `providers_id` (`providers_id`),
+                KEY `date_creation` (`date_creation`)
+            ) ENGINE=InnoDB
+            DEFAULT CHARSET={$default_charset}
+            COLLATE={$default_collation}
+        ");
+    }
+
     // Type de compte Accounts dédié (catégorie b — CDC 4.4/4.4 bis), créé de façon
     // best-effort : si le plugin Accounts est absent ou si la table n'a pas la forme
     // attendue, on ignore silencieusement plutôt que de bloquer install/activate — un

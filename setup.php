@@ -4,7 +4,7 @@
  * BackupGestion - Plugin GLPI 11 de visualisation des sauvegardes multi-provider (Acronis en V1)
  */
 
-define('PLUGIN_BACKUPGESTION_VERSION', '0.5.0-dev');
+define('PLUGIN_BACKUPGESTION_VERSION', '0.6.0-dev');
 define('PLUGIN_BACKUPGESTION_MIN_GLPI', '11.0.0');
 define('PLUGIN_BACKUPGESTION_MAX_GLPI', '12.0.0');
 
@@ -12,6 +12,7 @@ use Glpi\Plugin\Hooks;
 use GlpiPlugin\Backupgestion\Provider;
 use GlpiPlugin\Backupgestion\ProviderAccountsDefaults;
 use GlpiPlugin\Backupgestion\Right;
+use GlpiPlugin\Backupgestion\StorageSpace;
 
 function plugin_init_backupgestion(): void
 {
@@ -36,6 +37,12 @@ function plugin_init_backupgestion(): void
         'dropdown_itemtypes' => true,
     ]);
 
+    // Espaces de stockage (jalon 3, CDC 2.1) — sous-entrée du même menu "Sauvegardes",
+    // pas d'entrée de menu top-level séparée (cf. Provider::getMenuContent()).
+    Plugin::registerClass(StorageSpace::class, [
+        'dropdown_itemtypes' => true,
+    ]);
+
     // Onglet "Sauvegardes" dans les profils (matrice des 5 droits, 4.6)
     Plugin::registerClass(Right::class, ['addtabon' => 'Profile']);
 
@@ -54,8 +61,9 @@ function plugin_init_backupgestion(): void
         \GlpiPlugin\Accounts\Account::registerType(Provider::class);
     }
 
-    // NB : tâche CRON (détection périodique des rattachements, 4.7) arrive au jalon 3 —
-    // volontairement absente de ce squelette.
+    // NB : tâche CRON (détection périodique des rattachements, 4.7) et pages dashboard
+    // live (plans/appareils/stats) — prochaines étapes du jalon 3, pas encore dans ce
+    // squelette (StorageSpace, lui, est posé).
 }
 
 function plugin_version_backupgestion(): array

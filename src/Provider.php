@@ -368,20 +368,37 @@ class Provider extends CommonDBTM
         $search = self::getSearchURL(false);
         $form   = self::getFormURL(false);
 
+        $options = [
+            'provider' => [
+                'title' => self::getTypeName(2),
+                'page'  => $search,
+                'links' => [
+                    'search' => $search,
+                    'add'    => $form,
+                ],
+            ],
+        ];
+
+        // Espaces de stockage (jalon 3, CDC 2.1) — même menu "Sauvegardes", sous-entrée
+        // dédiée plutôt qu'un nouveau menu top-level.
+        if (StorageSpace::canView()) {
+            $storageSearch = StorageSpace::getSearchURL(false);
+            $storageForm   = StorageSpace::getFormURL(false);
+            $options['storagespace'] = [
+                'title' => StorageSpace::getTypeName(2),
+                'page'  => $storageSearch,
+                'links' => [
+                    'search' => $storageSearch,
+                    'add'    => $storageForm,
+                ],
+            ];
+        }
+
         return [
             'title'   => self::getMenuName(),
             'page'    => $search,
             'icon'    => self::getIcon(),
-            'options' => [
-                'provider' => [
-                    'title' => self::getTypeName(2),
-                    'page'  => $search,
-                    'links' => [
-                        'search' => $search,
-                        'add'    => $form,
-                    ],
-                ],
-            ],
+            'options' => $options,
         ];
     }
 

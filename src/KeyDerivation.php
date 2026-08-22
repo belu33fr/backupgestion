@@ -57,24 +57,32 @@ class KeyDerivation
     }
 
     /**
-     * Dérive la clé AES-256 pour un provider donné à partir de son snapshot figé.
-     * $providerFields doit contenir key_salt, keyowner_name, keyowner_email,
-     * entity_name_snapshot et id (utilisé comme "info" HKDF pour la séparation de contexte).
+     * Dérive la clé AES-256 pour un objet donné (Provider, StorageSpace…) à partir de
+     * son snapshot figé. $fields doit contenir key_salt, keyowner_name, keyowner_email,
+     * entity_name_snapshot.
+     *
+     * @param string|null $info Contexte HKDF (séparation de domaine). Par défaut
+     *        "backupgestion-provider-<id>" — comportement HISTORIQUE, à ne jamais changer
+     *        (des identifiants API Provider sont déjà chiffrés en production avec cette
+     *        formule exacte). Un appelant qui chiffre AVANT que l'ID définitif ne soit
+     *        connu (ex. StorageSpace::prepareInputForAdd(), appelé avant l'INSERT) doit
+     *        fournir un contexte constant, indépendant de l'id, pour rester cohérent
+     *        entre le chiffrement et le déchiffrement ultérieur.
      */
-    public static function deriveKey(array $providerFields): string
+    public static function deriveKey(array $fields, ?string $info = null): string
     {
-        $salt = hex2bin($providerFields['key_salt'] ?? '');
+        $salt = hex2bin($fields['key_salt'] ?? '');
         if ($salt === false || $salt === '') {
-            throw new \RuntimeException('KeyDerivation: sel de dérivation absent sur ce provider.');
+            throw new \RuntimeException('KeyDerivation: sel de dérivation absent.');
         }
 
         $ikm = implode('|', [
-            $providerFields['keyowner_name'] ?? '',
-            $providerFields['keyowner_email'] ?? '',
-            $providerFields['entity_name_snapshot'] ?? '',
+            $fields['keyowner_name'] ?? '',
+            $fields['keyowner_email'] ?? '',
+            $fields['entity_name_snapshot'] ?? '',
         ]);
 
-        $info = 'backupgestion-provider-' . (string)($providerFields['id'] ?? 0);
+        $info = $info ?? ('backupgestion-provider-' . (string)($fields['id'] ?? 0));
 
         return hash_hkdf(self::HASH_ALGO, $ikm, self::KEY_LENGTH, $info, $salt);
     }

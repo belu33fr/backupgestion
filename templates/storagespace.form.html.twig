@@ -1,0 +1,70 @@
+{% extends "generic_show_form.html.twig" %}
+{% import "components/form/fields_macros.html.twig" as fields %}
+
+{% block more_fields %}
+
+    {# Nom, entité, sous-entités et commentaire sont des champs CommonDBTM standards
+       déjà rendus par generic_show_form.html.twig. #}
+
+    <div class="mb-3 row">
+        <label class="col-xxl-4 col-form-label">{{ __('Type de stockage', 'backupgestion') }}</label>
+        <div class="col-xxl-8">
+            {% if item.fields['storage_type'] == 'acronis' %}
+                {# Un espace de stockage Acronis natif est découvert automatiquement par
+                   la tâche de détection (CDC 4.7) — jamais saisi à la main. #}
+                <div class="form-control-plaintext">
+                    <i class="ti ti-cloud me-1"></i>
+                    {{ __('Acronis (natif, découvert automatiquement)', 'backupgestion') }}
+                </div>
+                <input type="hidden" name="storage_type" value="acronis" />
+            {% else %}
+                <select name="storage_type" id="bg-storage-type" class="form-select" {% if not canUpdate %}disabled{% endif %}>
+                    {% for type, label in manualTypeLabels %}
+                        <option value="{{ type }}" {% if item.fields['storage_type'] == type %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if item.fields['storage_type'] != 'acronis' %}
+        {{ fields.smallTitle(__('Paramètres de connexion (chiffrés localement)', 'backupgestion')) }}
+
+        <div id="bg-connection-fields">
+            {% for key, def in connectionFields %}
+                <div class="mb-3 row">
+                    <label class="col-xxl-4 col-form-label">
+                        {{ def.label }}{% if def.required %} *{% endif %}
+                    </label>
+                    <div class="col-xxl-8">
+                        {% if def.type == 'password' %}
+                            <input type="password"
+                                   name="connection_params_raw[{{ key }}]"
+                                   class="form-control"
+                                   autocomplete="new-password"
+                                   data-lpignore="true"
+                                   data-1p-ignore
+                                   {% if not canUpdate %}disabled{% endif %}
+                                   placeholder="{{ item.fields['id'] ? __('Déjà renseigné — laisser vide pour ne pas modifier', 'backupgestion') : '' }}" />
+                        {% else %}
+                            <input type="text"
+                                   name="connection_params_raw[{{ key }}]"
+                                   class="form-control"
+                                   autocomplete="off"
+                                   value="{{ prefillValues[key] ?? '' }}"
+                                   {% if not canUpdate %}disabled{% endif %} />
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {% if item.fields['id'] %}
+        <div class="alert alert-info mt-2">
+            <i class="ti ti-info-circle me-2"></i>
+            {{ __("Les comptes Accounts liés à cet espace de stockage (accès, chiffrement…) et la consultation live de son occupation seront disponibles dans une prochaine étape.", 'backupgestion') }}
+        </div>
+    {% endif %}
+
+{% endblock more_fields %}
