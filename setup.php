@@ -32,16 +32,14 @@ function plugin_init_backupgestion(): void
     // Actions massives via hook (compatible namespace GLPI 11)
     $PLUGIN_HOOKS[Hooks::USE_MASSIVE_ACTION]['backupgestion'] = 1;
 
-    // Enregistrer la classe pour que getItemForItemtype() la trouve
-    Plugin::registerClass(Provider::class, [
-        'dropdown_itemtypes' => true,
-    ]);
+    // Enregistrer la classe pour que getItemForItemtype() la trouve. "dropdown_itemtypes"
+    // n'est pas/plus un attribut reconnu par Plugin::registerClass() dans cette version
+    // de GLPI (warning confirmé en log, y compris pour d'autres plugins) — retiré.
+    Plugin::registerClass(Provider::class);
 
     // Espaces de stockage (jalon 3, CDC 2.1) — sous-entrée du même menu "Sauvegardes",
     // pas d'entrée de menu top-level séparée (cf. Provider::getMenuContent()).
-    Plugin::registerClass(StorageSpace::class, [
-        'dropdown_itemtypes' => true,
-    ]);
+    Plugin::registerClass(StorageSpace::class);
 
     // Onglet "Sauvegardes" dans les profils (matrice des 5 droits, 4.6)
     Plugin::registerClass(Right::class, ['addtabon' => 'Profile']);
