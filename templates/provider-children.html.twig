@@ -1,0 +1,154 @@
+<div class="mb-3">
+    {% if canUpdate %}
+        <div class="col-12 mb-3 d-flex gap-2 flex-wrap align-items-center">
+            <button type="button" id="bg-btn-discover" class="btn btn-secondary" data-id="{{ item.fields['id'] }}" data-url="{{ webdir }}/front/provider.form.php">
+                <i class="ti ti-hierarchy-2 me-1"></i>{{ __('Découvrir les tenants enfants', 'backupgestion') }}
+            </button>
+            <span id="bg-discover-result"></span>
+        </div>
+        <script>
+        (function() {
+            var csrfMeta = document.querySelector("meta[property='glpi:csrf_token']");
+            var csrf = csrfMeta ? csrfMeta.content : '';
+
+            function postAction(btn, resultEl, body, onSuccess) {
+                btn.disabled = true;
+                resultEl.innerHTML = "<span class='badge bg-info'>" + {{ __('En cours...', 'backupgestion')|json_encode|raw }} + "</span>";
+                fetch(btn.dataset.url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Glpi-Csrf-Token': csrf, 'X-Requested-With': 'XMLHttpRequest'},
+                    body: new URLSearchParams(body)
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    btn.disabled = false;
+                    if (d.success) {
+                        onSuccess(d, resultEl);
+                    } else {
+                        resultEl.innerHTML = "<span class='badge bg-danger'>" + (d.message || {{ __('Échec', 'backupgestion')|json_encode|raw }}) + "</span>";
+                    }
+                })
+                .catch(function() {
+                    btn.disabled = false;
+                    resultEl.innerHTML = "<span class='badge bg-danger'>" + {{ __('Erreur réseau', 'backupgestion')|json_encode|raw }} + "</span>";
+                });
+            }
+
+            var discoverBtn = document.getElementById('bg-btn-discover');
+            if (discoverBtn) {
+                discoverBtn.addEventListener('click', function() {
+                    postAction(discoverBtn, document.getElementById('bg-discover-result'),
+                        {discover_children: '1', id: discoverBtn.dataset.id},
+                        function(d, el) {
+                            var msg = (d.found || 0) + ' ' + {{ __('trouvé(s)', 'backupgestion')|json_encode|raw }}
+                                + ' — ' + (d.created || 0) + ' ' + {{ __('créé(s)', 'backupgestion')|json_encode|raw }}
+                                + ', ' + (d.updated || 0) + ' ' + {{ __('mis à jour', 'backupgestion')|json_encode|raw }}
+                                + ', ' + (d.restored || 0) + ' ' + {{ __('restauré(s) de la corbeille', 'backupgestion')|json_encode|raw }};
+                            el.innerHTML = "<span class='badge bg-success'>" + msg + "</span>";
+                            if ((d.created || 0) > 0 || (d.restored || 0) > 0) {
+                                setTimeout(function() { window.location.reload(); }, 1500);
+                            }
+                        }
+                    );
+                });
+            }
+        })();
+        </script>
+    {% endif %}
+
+    {% if children|length %}
+        <table class="table table-sm">
+            <colgroup>
+                <col style="width: 30%;">
+                <col>
+                <col style="width: 130px;">
+            </colgroup>
+            <thead><tr><th>{{ __('Nom') }}</th><th>{{ __('Entité') }}</th><th></th></tr></thead>
+            <tbody>
+            {% for child in children %}
+                <tr>
+                    <td><a href="{{ webdir }}/front/provider.form.php?id={{ child.id }}">{{ child.name }}</a></td>
+                    <td>
+                        {% if canUpdate %}
+                            <span class="bg-quickmove-entity-wrap d-block" data-child-id="{{ child.id }}" data-select-name="quickmove_entity_{{ child.id }}" title="{{ child.entity_name }}">
+                                {{ child.quickmove_widget|raw }}
+                            </span>
+                        {% else %}
+                            {{ child.entity_name }}
+                        {% endif %}
+                    </td>
+                    <td class="d-flex flex-wrap gap-2 align-items-center">
+                        {% if canUpdate %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary bg-btn-quickmove" data-child-id="{{ child.id }}" data-url="{{ webdir }}/front/provider.form.php">
+                                {{ __('Déplacer', 'backupgestion') }}
+                            </button>
+                            <span class="bg-quickmove-result" data-child-id="{{ child.id }}"></span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <script>
+        (function() {
+            var csrfMeta = document.querySelector("meta[property='glpi:csrf_token']");
+            var csrf = csrfMeta ? csrfMeta.content : '';
+
+            function doMove(btn, childId, extra) {
+                var select   = document.querySelector('select[name="quickmove_entity_' + childId + '"]');
+                var resultEl = document.querySelector('.bg-quickmove-result[data-child-id="' + childId + '"]');
+                var body = Object.assign({quick_move_entity: '1', id: childId, entities_id: select.value}, extra || {});
+                btn.disabled = true;
+                resultEl.innerHTML = "<span class='badge bg-info'>" + {{ __('En cours...', 'backupgestion')|json_encode|raw }} + "</span>";
+                fetch(btn.dataset.url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Glpi-Csrf-Token': csrf, 'X-Requested-With': 'XMLHttpRequest'},
+                    body: new URLSearchParams(body)
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    btn.disabled = false;
+                    if (d.success) {
+                        resultEl.innerHTML = "<span class='badge bg-success'>" + {{ __('Déplacé', 'backupgestion')|json_encode|raw }} + "</span>";
+                        setTimeout(function() { window.location.reload(); }, 1000);
+                    } else if (d.needs_hash_selection) {
+                        var opts = '<option value="0">-- {{ __('Choisir une empreinte', 'backupgestion') }} --</option>';
+                        Object.keys(d.hashes || {}).forEach(function(hid) {
+                            opts += '<option value="' + hid + '">' + d.hashes[hid] + '</option>';
+                        });
+                        resultEl.innerHTML =
+                            "<div class='alert alert-warning p-2 mb-1'>" + (d.message || '') + "</div>" +
+                            "<select class='form-select form-select-sm mb-1 bg-quickmove-newhash'>" + opts + "</select>" +
+                            "<input type='password' class='form-control form-control-sm mb-1 bg-quickmove-newkey' placeholder='" +
+                            {{ __('Clé de l\'empreinte', 'backupgestion')|json_encode|raw }} + "' autocomplete='new-password' />" +
+                            "<button type='button' class='btn btn-sm btn-primary bg-btn-quickmove-confirm'>" +
+                            {{ __('Confirmer le déplacement', 'backupgestion')|json_encode|raw }} + "</button>";
+                        resultEl.querySelector('.bg-btn-quickmove-confirm').addEventListener('click', function() {
+                            var newHashId = resultEl.querySelector('.bg-quickmove-newhash').value;
+                            var newKey    = resultEl.querySelector('.bg-quickmove-newkey').value;
+                            doMove(btn, childId, {accounts_hash_id: newHashId, accounts_key: newKey});
+                        });
+                    } else {
+                        resultEl.innerHTML = "<span class='badge bg-danger'>" + (d.message || {{ __('Échec', 'backupgestion')|json_encode|raw }}) + "</span>";
+                    }
+                })
+                .catch(function() {
+                    btn.disabled = false;
+                    resultEl.innerHTML = "<span class='badge bg-danger'>" + {{ __('Erreur réseau', 'backupgestion')|json_encode|raw }} + "</span>";
+                });
+            }
+
+            document.querySelectorAll('.bg-btn-quickmove').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    doMove(btn, btn.dataset.childId, {});
+                });
+            });
+        })();
+        </script>
+    {% else %}
+        <div class="alert alert-info">
+            <i class="ti ti-info-circle me-2"></i>
+            {{ __('Aucun sous-tenant rattaché pour le moment.', 'backupgestion') }}
+        </div>
+    {% endif %}
+</div>

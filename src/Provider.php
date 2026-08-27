@@ -289,38 +289,6 @@ class Provider extends CommonDBTM
         ];
     }
 
-    /**
-     * Entité donnée + toutes ses sous-entités (lecture directe de glpi_entities.entities_id,
-     * schéma stable du cœur GLPI) — pas de dépendance à un helper GLPI dont le comportement
-     * exact ne peut pas être vérifié ici (cf. AccountsVault::getAncestorEntityIds()).
-     */
-    private static function getDescendantEntityIds(int $entities_id): array
-    {
-        global $DB;
-
-        $result   = [$entities_id];
-        $frontier = [$entities_id];
-        $guard    = 0;
-
-        while (!empty($frontier) && $guard++ < 50) {
-            $next = [];
-            foreach ($DB->request([
-                'FROM'   => 'glpi_entities',
-                'WHERE'  => ['entities_id' => $frontier],
-                'SELECT' => ['id'],
-            ]) as $row) {
-                $id = (int)$row['id'];
-                if (!in_array($id, $result, true)) {
-                    $result[] = $id;
-                    $next[]   = $id;
-                }
-            }
-            $frontier = $next;
-        }
-
-        return $result;
-    }
-
     public static function getTypeName($nb = 0): string
     {
         // "Provider" seul est ambigu — d'autres plugins peuvent enregistrer un type
@@ -423,7 +391,6 @@ class Provider extends CommonDBTM
 
         $hasCredentials  = [];
         $prefillValues   = [];
-        $children        = [];
         // Champs jamais renvoyés en clair au navigateur, même sur la fiche d'édition —
         // le seul "vrai" secret parmi les identifiants (comme le mot de passe DNSManager).
         $neverPrefilled  = ['client_secret'];
@@ -452,66 +419,9 @@ class Provider extends CommonDBTM
                 // pas de pré-remplissage, l'utilisateur ressaisira tout — pas bloquant.
             }
 
-            // Ne lister que les enfants dont l'entité est celle du parent ou une
-            // sous-entité de celle-ci : un enfant resté dans son entité d'origine après
-            // un déplacement du parent (backupgestion_providers_id_parent seul ne bouge
-            // pas les entités) ne doit plus apparaître si son entité n'est plus visible
-            // depuis celle du parent — confirmé par Luc.
-            $visibleEntities = self::getDescendantEntityIds((int)$this->fields['entities_id']);
-            if (!in_array(0, $visibleEntities, true)) {
-                // Un tenant enfant découvert automatiquement peut ne pas encore avoir
-                // d'entité validée (entities_id = 0) — il doit rester visible dans la
-                // liste pour pouvoir être rattaché via le transfert rapide, même s'il
-                // n'est pas (encore) une sous-entité du parent (retour de Luc).
-                $visibleEntities[] = 0;
-            }
-            foreach ($DB->request([
-                'FROM'  => self::getTable(),
-                'WHERE' => [
-                    'backupgestion_providers_id_parent' => $this->fields['id'],
-                    'entities_id'                        => $visibleEntities,
-                    // Un enfant mis à la corbeille (is_deleted) ne doit plus apparaître
-                    // comme sous-tenant actif.
-                    'is_deleted'                          => 0,
-                ],
-                'ORDER' => 'name ASC',
-            ]) as $row) {
-                // Nom complet de l'entité (pas juste son index — retour de Luc), via le
-                // helper standard GLPI (confirmé utilisé par Accounts lui-même) — sauf
-                // pour une entité non encore validée (id 0), affichée explicitement.
-                $row['entity_name'] = ((int)$row['entities_id'] === 0)
-                    ? __('(non attribuée)', 'backupgestion')
-                    : \Dropdown::getDropdownName('glpi_entities', (int)$row['entities_id']);
-
-                // Sélecteur de déplacement rapide (retour de Luc — éviter le transfert
-                // d'entité complet juste pour rattacher un tenant enfant) : on réutilise
-                // le widget natif GLPI (Dropdown::show, recherche intégrée à la liste
-                // déroulante) — même mécanisme et même ergonomie que le combo "Utilisateur
-                // concerné" de l'onglet "Valeurs par défaut", plutôt qu'une zone de
-                // filtre reconstruite à la main.
-                $row['quickmove_widget'] = \Dropdown::show('Entity', [
-                    'name'    => 'quickmove_entity_' . $row['id'],
-                    'value'   => (int)$row['entities_id'],
-                    // Largeur relative (retour de Luc : en pixels fixes, le combo ne
-                    // remplissait qu'environ 20% de la colonne "Entité") — occupe toute
-                    // la largeur disponible de sa colonne, elle-même désormais flexible.
-                    'width'   => '100%',
-                    'rand'    => mt_rand(),
-                    'display' => false,
-                ]);
-
-                $children[] = $row;
-            }
-        }
-
-        // Zone "bonus" — ne doit jamais empêcher l'affichage de la fiche : toute erreur
-        // inattendue ici (ex. plugin Accounts présent mais incompatible) est absorbée,
-        // la fiche s'affiche alors comme si Accounts était indisponible.
-        $accountsAvailable = false;
-        try {
-            $accountsAvailable = AccountsVault::isAvailable();
-        } catch (\Throwable $e) {
-            $accountsAvailable = false;
+            // La liste des sous-tenants rattachés et la création de compte sont
+            // désormais dans leurs propres onglets (ProviderChildren, ProviderAccounts)
+            // pour alléger cette fiche — retour de Luc.
         }
 
         \Glpi\Application\View\TemplateRenderer::getInstance()->display(
@@ -524,10 +434,7 @@ class Provider extends CommonDBTM
                 'credentialFields'     => ProviderFactory::getCredentialFields('acronis'),
                 'hasCredentials'       => $hasCredentials,
                 'prefillValues'        => $prefillValues,
-                'children'             => $children,
                 'webdir'               => Plugin::getWebDir('backupgestion'),
-                'accountsAvailable'    => $accountsAvailable,
-                'accountsHashId'       => (int)($this->fields['accounts_hash_id'] ?? 0),
                 // Masque les actions d'écriture (découverte, création de compte,
                 // transfert rapide) pour un profil en lecture seule (ex. Observateur) —
                 // le serveur les bloque déjà, mais les laisser visibles pour rien

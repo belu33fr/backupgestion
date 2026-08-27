@@ -4,13 +4,15 @@
  * BackupGestion - Plugin GLPI 11 de visualisation des sauvegardes multi-provider (Acronis en V1)
  */
 
-define('PLUGIN_BACKUPGESTION_VERSION', '0.6.0-dev');
+define('PLUGIN_BACKUPGESTION_VERSION', '0.8.0-dev');
 define('PLUGIN_BACKUPGESTION_MIN_GLPI', '11.0.0');
 define('PLUGIN_BACKUPGESTION_MAX_GLPI', '12.0.0');
 
 use Glpi\Plugin\Hooks;
 use GlpiPlugin\Backupgestion\Provider;
+use GlpiPlugin\Backupgestion\ProviderAccounts;
 use GlpiPlugin\Backupgestion\ProviderAccountsDefaults;
+use GlpiPlugin\Backupgestion\ProviderChildren;
 use GlpiPlugin\Backupgestion\Right;
 use GlpiPlugin\Backupgestion\StorageSpace;
 
@@ -48,16 +50,21 @@ function plugin_init_backupgestion(): void
     // fiche principale pour la clarté de l'interface (retour de Luc).
     Plugin::registerClass(ProviderAccountsDefaults::class, ['addtabon' => Provider::class]);
 
+    // Onglet "Sous-tenants" sur la fiche provider — liste des tenants enfants
+    // rattachés + découverte, séparés de la fiche principale pour l'alléger
+    // (retour de Luc).
+    Plugin::registerClass(ProviderChildren::class, ['addtabon' => Provider::class]);
+
+    // Onglet "Comptes" sur la fiche provider — création de compte (formulaire
+    // BackupGestion) + liste des comptes déjà liés (rendue directement par
+    // Accounts, Account_Item::showForAsset), regroupées en un seul endroit
+    // (retour de Luc). Remplace l'onglet natif "Comptes associés" d'Accounts :
+    // Account::registerType(Provider::class) n'est volontairement plus appelé
+    // ci-dessous, sinon les deux onglets coexisteraient en faisant doublon.
+    Plugin::registerClass(ProviderAccounts::class, ['addtabon' => Provider::class]);
+
     // Initialiser les droits dans la session courante
     Right::initProfile();
-
-    // Enregistre Provider comme type "associable" auprès du plugin Accounts (CDC 4.4) :
-    // ajoute automatiquement l'onglet natif "Comptes associés" (liste, déchiffrement,
-    // etc.) sur la fiche provider — doit être appelé avant le hook POST_INIT d'Accounts,
-    // qui construit ses onglets à partir des types enregistrés à ce stade.
-    if (class_exists('\GlpiPlugin\Accounts\Account')) {
-        \GlpiPlugin\Accounts\Account::registerType(Provider::class);
-    }
 
     // NB : tâche CRON (détection périodique des rattachements, 4.7) et pages dashboard
     // live (plans/appareils/stats) — prochaines étapes du jalon 3, pas encore dans ce

@@ -1,0 +1,164 @@
+{% import "components/form/fields_macros.html.twig" as fields %}
+
+{% if canUpdate %}
+    {{ fields.smallTitle(__('Créer un compte utilisateur', 'backupgestion')) }}
+
+    <div class="alert alert-info">
+        <i class="ti ti-info-circle me-2"></i>
+        {{ __('Création de compte utilisateur/admin/clé cryptage avec les valeurs par défaut.', 'backupgestion') }}
+    </div>
+
+    <div class="mb-3 row">
+        <label class="col-xxl-4 col-form-label">{{ __('Identifiant', 'backupgestion') }}</label>
+        <div class="col-xxl-8">
+            <input type="text" id="bg-accounts-login" class="form-control" autocomplete="off" />
+        </div>
+    </div>
+    <div class="mb-3 row">
+        <label class="col-xxl-4 col-form-label">{{ __('Mot de passe', 'backupgestion') }}</label>
+        <div class="col-xxl-8">
+            <input type="password" id="bg-accounts-password" class="form-control"
+                   autocomplete="new-password"
+                   data-lpignore="true" data-1p-ignore />
+        </div>
+    </div>
+    <div class="mb-3 row">
+        <label class="col-xxl-4 col-form-label">{{ __('Administrateur', 'backupgestion') }}</label>
+        <div class="col-xxl-8">
+            <input type="checkbox" id="bg-accounts-is-admin" class="form-check-input" />
+            <span class="form-text d-inline">{{ __('Force le type en Administration.', 'backupgestion') }}</span>
+        </div>
+    </div>
+    <div class="mb-3 row">
+        <label class="col-xxl-4 col-form-label">{{ __('Clé de cryptage', 'backupgestion') }}</label>
+        <div class="col-xxl-8">
+            <input type="checkbox" id="bg-accounts-is-cryptkey" class="form-check-input" />
+            <span class="form-text d-inline">{{ __('Force le type en "Clé de chiffrement". Exclusif avec "Administrateur".', 'backupgestion') }}</span>
+        </div>
+    </div>
+    <div class="mb-3 row">
+        <label class="col-xxl-4 col-form-label">{{ __('Empreinte — clé de chiffrement', 'backupgestion') }}</label>
+        <div class="col-xxl-8">
+            <input type="password" id="bg-accounts-key" class="form-control"
+                   autocomplete="new-password"
+                   data-lpignore="true" data-1p-ignore
+                   placeholder="{{ __('Laisser vide si une clé serveur ou de session est déjà disponible', 'backupgestion') }}" />
+        </div>
+    </div>
+    <div class="col-12 mb-3 d-flex gap-2 flex-wrap align-items-center">
+        <button type="button" id="bg-btn-create-accounts" class="btn btn-primary" data-id="{{ item.fields['id'] }}" data-url="{{ webdir }}/front/provider.form.php">
+            <i class="ti ti-key me-1"></i>{{ __('Créer le compte', 'backupgestion') }}
+        </button>
+        <button type="button" id="bg-btn-forget-key" class="btn btn-outline-secondary" data-id="{{ item.fields['id'] }}" data-hash="{{ accountsHashId }}" data-url="{{ webdir }}/front/provider.form.php">
+            <i class="ti ti-lock-off me-1"></i>{{ __('Oublier la clé', 'backupgestion') }}
+        </button>
+        <span id="bg-accounts-result"></span>
+    </div>
+    <script>
+    (function() {
+        var csrfMeta = document.querySelector("meta[property='glpi:csrf_token']");
+        var csrf = csrfMeta ? csrfMeta.content : '';
+
+        function postForm(btn, resultEl, body, onSuccess) {
+            btn.disabled = true;
+            resultEl.innerHTML = "<span class='badge bg-info'>" + {{ __('En cours...', 'backupgestion')|json_encode|raw }} + "</span>";
+            fetch(btn.dataset.url, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Glpi-Csrf-Token': csrf, 'X-Requested-With': 'XMLHttpRequest'},
+                body: new URLSearchParams(body)
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                btn.disabled = false;
+                if (d.success) {
+                    onSuccess(d, resultEl);
+                } else {
+                    resultEl.innerHTML = "<span class='badge bg-danger'>" + (d.message || {{ __('Échec', 'backupgestion')|json_encode|raw }}) + "</span>";
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                resultEl.innerHTML = "<span class='badge bg-danger'>" + {{ __('Erreur réseau', 'backupgestion')|json_encode|raw }} + "</span>";
+            });
+        }
+
+        var isAdminBox    = document.getElementById('bg-accounts-is-admin');
+        var isCryptkeyBox = document.getElementById('bg-accounts-is-cryptkey');
+        var loginInput    = document.getElementById('bg-accounts-login');
+
+        // Une "Clé de cryptage" n'a pas de notion d'identifiant : on vide et on
+        // verrouille le champ tant que la case est cochée, pour éviter qu'une saisie
+        // oubliée ne soit enregistrée sur ce type de compte (retour de Luc).
+        function syncLoginField() {
+            if (loginInput) {
+                if (isCryptkeyBox.checked) {
+                    loginInput.value = '';
+                    loginInput.disabled = true;
+                } else {
+                    loginInput.disabled = false;
+                }
+            }
+        }
+
+        if (isAdminBox && isCryptkeyBox) {
+            isAdminBox.addEventListener('change', function() {
+                if (isAdminBox.checked) { isCryptkeyBox.checked = false; }
+                syncLoginField();
+            });
+            isCryptkeyBox.addEventListener('change', function() {
+                if (isCryptkeyBox.checked) { isAdminBox.checked = false; }
+                syncLoginField();
+            });
+        }
+
+        var createBtn = document.getElementById('bg-btn-create-accounts');
+        if (createBtn) {
+            createBtn.addEventListener('click', function() {
+                var resultEl = document.getElementById('bg-accounts-result');
+                postForm(createBtn, resultEl, {
+                    create_accounts_admin: '1',
+                    id: createBtn.dataset.id,
+                    accounts_login: loginInput.value,
+                    accounts_password: document.getElementById('bg-accounts-password').value,
+                    accounts_is_admin: isAdminBox.checked ? '1' : '',
+                    accounts_is_cryptkey: isCryptkeyBox.checked ? '1' : '',
+                    accounts_key: document.getElementById('bg-accounts-key').value
+                }, function(d, el) {
+                    el.innerHTML = "<span class='badge bg-success'>" + {{ __('Compte créé et lié', 'backupgestion')|json_encode|raw }} + " (#" + d.accounts_id + ")</span>";
+                    loginInput.disabled = false;
+                    loginInput.value = '';
+                    document.getElementById('bg-accounts-password').value = '';
+                    isAdminBox.checked = false;
+                    isCryptkeyBox.checked = false;
+                    document.getElementById('bg-accounts-key').value = '';
+                    // La liste native (rendue par Accounts juste en dessous) ne se
+                    // met pas à jour toute seule — un rechargement reste le moyen le
+                    // plus fiable de la refléter sans dupliquer sa logique d'affichage.
+                    setTimeout(function() { window.location.reload(); }, 1200);
+                });
+            });
+        }
+
+        var forgetBtn = document.getElementById('bg-btn-forget-key');
+        if (forgetBtn) {
+            forgetBtn.addEventListener('click', function() {
+                var resultEl = document.getElementById('bg-accounts-result');
+                postForm(forgetBtn, resultEl, {
+                    forget_accounts_key: '1',
+                    id: forgetBtn.dataset.id,
+                    accounts_hash_id: forgetBtn.dataset.hash
+                }, function(d, el) {
+                    el.innerHTML = "<span class='badge bg-success'>" + {{ __('Clé oubliée', 'backupgestion')|json_encode|raw }} + "</span>";
+                });
+            });
+        }
+    })();
+    </script>
+{% else %}
+    <div class="alert alert-secondary mt-2">
+        <i class="ti ti-lock me-2"></i>
+        {{ __('Droits insuffisants pour créer un compte.', 'backupgestion') }}
+    </div>
+{% endif %}
+
+<hr class="my-4" />
