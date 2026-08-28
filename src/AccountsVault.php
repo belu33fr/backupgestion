@@ -433,10 +433,19 @@ class AccountsVault
     }
 
     /**
-     * Liste des comptes Accounts visibles pour une entité (elle-même + ancêtres
-     * récursifs), avec un libellé enrichi "Nom — Type · lié à : X, Y" — retour de Luc
-     * (onglet Comptes de StorageSpace) : le nom seul ne suffit pas à distinguer des
-     * comptes, il faut voir le type de compte et les éléments déjà liés (Account_Item).
+     * Liste des comptes Accounts visibles pour une entité (elle-même + SOUS-entités,
+     * recoupé avec les entités réellement actives de la session en cours), avec un
+     * libellé enrichi "Nom — Type · lié à : X, Y" — retour de Luc (onglet Comptes de
+     * StorageSpace) : le nom seul ne suffit pas à distinguer des comptes, il faut voir
+     * le type de compte et les éléments déjà liés (Account_Item).
+     *
+     * Portée corrigée (retour de Luc — "371 comptes accessibles" invisibles) : une
+     * première version filtrait sur l'entité ET SES ANCÊTRES récursifs, comme pour les
+     * empreintes Accounts (AccountsVault::listHashes) — pertinent pour un réglage qui
+     * "descend" depuis une entité parente, mais faux ici : les comptes créés dans une
+     * SOUS-entité de l'espace de stockage n'apparaissaient jamais. Même logique que
+     * Dropdown::show(..., ['entity' => $id, 'entity_sons' => true]) : entité + branche
+     * descendante, filtrée par ce que la session en cours peut effectivement voir.
      *
      * @return array<int, string> id => libellé, prêt pour Dropdown::showFromArray().
      */
@@ -448,17 +457,13 @@ class AccountsVault
             return [];
         }
 
-        $ancestors = self::getAncestorEntityIds($entities_id);
-        if ($DB->fieldExists('glpi_plugin_accounts_accounts', 'is_recursive')) {
-            $where = [
-                'OR' => [
-                    ['glpi_plugin_accounts_accounts.entities_id' => $entities_id],
-                    ['glpi_plugin_accounts_accounts.entities_id' => $ancestors, 'glpi_plugin_accounts_accounts.is_recursive' => 1],
-                ],
-            ];
-        } else {
-            $where = ['glpi_plugin_accounts_accounts.entities_id' => array_merge([$entities_id], $ancestors)];
+        $branch          = getSonsOf('glpi_entities', $entities_id);
+        $visibleEntities = \Session::getMatchingActiveEntities($branch);
+        if (empty($visibleEntities)) {
+            return [];
         }
+
+        $where = ['glpi_plugin_accounts_accounts.entities_id' => $visibleEntities];
 
         $accounts = [];
         foreach ($DB->request([
