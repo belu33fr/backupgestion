@@ -210,6 +210,19 @@ function plugin_backupgestion_migrate(): void
     // liaison stockage <-> comptes Accounts, rattachement léger appareil/stockage <->
     // équipement GLPI (pas de mirroir), et journal de la tâche périodique de détection.
     $storageTable = \GlpiPlugin\Backupgestion\StorageSpace::getTable();
+
+    // Bugfix (retour de Luc, jalon 3) : la table doit se résoudre en la classe
+    // "StorageSpace" via la convention GLPI (nom de classe en minuscules + "s") pour que
+    // Toolbox::getItemTypeForTable() fonctionne — "glpi_plugin_backupgestion_storages" ne
+    // se résout qu'en "Storage" (classe inexistante), et Search::show() plantait alors
+    // avec "Class name must be a valid object or a string" (confirmé par les logs et le
+    // mode debug GLPI). Renommage transparent depuis l'ancien nom de table si nécessaire —
+    // ne touche à rien si l'installation est neuve (l'ancienne table n'existe pas).
+    $oldStorageTable = 'glpi_plugin_backupgestion_storages';
+    if ($oldStorageTable !== $storageTable && $DB->tableExists($oldStorageTable) && !$DB->tableExists($storageTable)) {
+        $DB->doQuery("RENAME TABLE `$oldStorageTable` TO `$storageTable`");
+    }
+
     if (!$DB->tableExists($storageTable)) {
         $DB->doQuery("
             CREATE TABLE `$storageTable` (

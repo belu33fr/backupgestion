@@ -243,7 +243,11 @@ class StorageSpace extends CommonDBTM
 
     public static function getTable($classname = null): string
     {
-        return 'glpi_plugin_backupgestion_storages';
+        // Doit se résoudre en "StorageSpace" via la convention GLPI de résolution
+        // classe<->table (nom de classe en minuscules + "s") pour que
+        // Toolbox::getItemTypeForTable() fonctionne correctement, notamment dans
+        // Search::show() — voir la migration de renommage dans hook.php.
+        return 'glpi_plugin_backupgestion_storagespaces';
     }
 
     public static function getIcon(): string
