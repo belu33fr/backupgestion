@@ -175,4 +175,152 @@ class AcronisProvider implements ProviderInterface
 
         return ['tenant_id' => $tenantId, 'children' => $children];
     }
+
+    // ------------------------------------------------------------------
+    // Dashboards live (jalon 3, CDC 2.1) — appareils, plans, statistiques. Appelées à
+    // chaque affichage de page, jamais par un job de synchro (aucun mirroir local).
+    // ------------------------------------------------------------------
+
+    /**
+     * GET paginé (curseur `after`/`limit`, confirmé via la documentation officielle
+     * developer.acronis.com/doc/outbound/apis/pagination.html) — jusqu'à $maxPages
+     * pages de $limit éléments, pour rester borné en cas de tenant très volumineux
+     * (CDC 4.7 : "la tâche périodique de détection doit rester paginée").
+     */
+    private function apiGetPaginated(string $path, string $accessToken, array $query = [], int $limit = 200, int $maxPages = 25): array
+    {
+        $items  = [];
+        $after  = null;
+        $pages  = 0;
+
+        do {
+            $pageQuery = $query + ['limit' => $limit];
+            if ($after !== null) {
+                $pageQuery['after'] = $after;
+            }
+
+            $url = $this->datacenterUrl . '/api' . $path . '?' . http_build_query($pageQuery);
+
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $accessToken],
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 20,
+                CURLOPT_SSL_VERIFYPEER => true,
+            ]);
+            $response = curl_exec($ch);
+            $errno    = curl_errno($ch);
+            $error    = curl_error($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($errno !== 0) {
+                throw new \RuntimeException(sprintf(__('Connexion impossible à %s : %s', 'backupgestion'), $url, $error));
+            }
+            if ($httpCode !== 200) {
+                throw new \RuntimeException(sprintf(__('Appel API refusé (HTTP %d) sur %s.', 'backupgestion'), $httpCode, $path));
+            }
+
+            $data = json_decode((string)$response, true);
+            if (!is_array($data)) {
+                throw new \RuntimeException(sprintf(__('Réponse inattendue de l\'API sur %s.', 'backupgestion'), $path));
+            }
+
+            foreach (($data['items'] ?? []) as $item) {
+                $items[] = $item;
+            }
+
+            $after = $data['paging']['cursors']['after'] ?? null;
+            $pages++;
+        } while ($after !== null && $pages < $maxPages);
+
+        return $items;
+    }
+
+    /**
+     * Appareils (agents) visibles depuis le tenant de ce provider — Agent Management API
+     * (developer.acronis.com/doc/outbound/apis/api-library/agents/managing-agents/fetch-agents.html) :
+     *   GET {datacenter_url}/api/agent_manager/v2/agents
+     * Inclut les agents des tenants enfants sauf barrière de visibilité (comportement
+     * natif de l'API, pas un choix de BackupGestion).
+     */
+    public function listDevices(): array
+    {
+        $token = $this->fetchAccessToken();
+        $raw   = $this->apiGetPaginated('/agent_manager/v2/agents', $token['access_token']);
+
+        $devices = [];
+        foreach ($raw as $item) {
+            $devices[] = [
+                'id'        => (string)($item['id'] ?? ''),
+                'name'      => (string)($item['hostname'] ?? ($item['name'] ?? '')),
+                'online'    => !empty($item['online']),
+                'enabled'   => !empty($item['enabled']),
+                'platform'  => (string)($item['platform']['family'] ?? ''),
+                // Tenant réel propriétaire de l'appareil (peut différer du tenant du
+                // provider interrogé : l'API remonte aussi les appareils des tenants
+                // enfants) — indispensable pour la déduplication par identité réelle
+                // (CDC 4.2 ter), jamais par providers_id local.
+                'tenant_id' => (string)($item['tenant']['id'] ?? ''),
+                'tenant'    => (string)($item['tenant']['name'] ?? ''),
+                'registered_at' => (string)($item['registration_date'] ?? ''),
+            ];
+        }
+        return $devices;
+    }
+
+    /**
+     * Plans de sauvegarde (protection plans/policies) — Resource and Policy Management
+     * API (developer.acronis.com/doc/outbound/apis/api-library/resource-policy/policies/fetching-plans-policies.html) :
+     *   GET {datacenter_url}/api/policy_management/v4/policies
+     * La réponse imbrique les plans sous une clé `policy` (tableau) par élément —
+     * aplatie ici pour un usage direct côté affichage.
+     */
+    public function listBackupPlans(): array
+    {
+        $token = $this->fetchAccessToken();
+        $raw   = $this->apiGetPaginated('/policy_management/v4/policies', $token['access_token']);
+
+        $plans = [];
+        foreach ($raw as $entry) {
+            foreach (($entry['policy'] ?? []) as $policy) {
+                $plans[] = [
+                    'id'         => (string)($policy['id'] ?? ''),
+                    'name'       => (string)($policy['name'] ?? ''),
+                    'type'       => (string)($policy['type'] ?? ''),
+                    'enabled'    => !empty($policy['enabled']),
+                    'tenant_id'  => (string)($policy['tenant_id'] ?? ''),
+                    'updated_at' => (string)($policy['updated_at'] ?? ''),
+                ];
+            }
+        }
+        return $plans;
+    }
+
+    /**
+     * Statistiques d'usage du tenant de ce provider (volume de stockage, etc.) —
+     * Account Management API (developer.acronis.com/doc/account-management/v2/guide/usage-reporting/tenants-usage.html) :
+     *   GET {datacenter_url}/api/2/tenants/usages?tenants={tenant_id}
+     */
+    public function listBackupStats(): array
+    {
+        $token    = $this->fetchAccessToken();
+        $tenantId = $this->getOwnTenantId($token['access_token']);
+
+        // apiGet() préfixe déjà '/api/2' — ne pas le répéter ici (piège rencontré en relecture).
+        $data = $this->apiGet('/tenants/usages', $token['access_token'], ['tenants' => $tenantId]);
+
+        $stats = [];
+        foreach (($data['items'] ?? []) as $tenantUsages) {
+            foreach (($tenantUsages['usages'] ?? []) as $usage) {
+                $stats[] = [
+                    'name'  => (string)($usage['usage_name'] ?? ($usage['name'] ?? '')),
+                    'value' => $usage['value'] ?? null,
+                    'unit'  => (string)($usage['measurement_unit'] ?? ''),
+                    'type'  => (string)($usage['type'] ?? ''),
+                ];
+            }
+        }
+        return $stats;
+    }
 }

@@ -33,4 +33,41 @@ class DeviceLink extends CommonDBTM
     {
         return _n('Rattachement appareil', 'Rattachements appareils', $nb, 'backupgestion');
     }
+
+    /**
+     * Enregistre qu'un appareil a bien été vu lors de ce passage de la tâche de
+     * détection (CDC 4.7) : crée le rattachement (statut "pending", en attente de
+     * mapping manuel ou de matcher — jalon 4) s'il n'existait pas encore pour cette
+     * identité réelle (acronis_tenant_id, provider_ref), sinon se contente de
+     * rafraîchir last_checked_at sans toucher à un éventuel rattachement déjà décidé
+     * (auto/manual/ignored) — la détection ne doit jamais écraser un choix humain.
+     *
+     * @return array{id:int, created:bool}
+     */
+    public static function recordSeen(string $acronisTenantId, string $providerRef): array
+    {
+        $link = new self();
+        if ($link->getFromDBByCrit(['acronis_tenant_id' => $acronisTenantId, 'provider_ref' => $providerRef])) {
+            $link->update([
+                'id'              => $link->fields['id'],
+                'last_checked_at' => date('Y-m-d H:i:s'),
+            ]);
+            return ['id' => (int)$link->fields['id'], 'created' => false];
+        }
+
+        $new = new self();
+        $id  = $new->add([
+            'acronis_tenant_id' => $acronisTenantId,
+            'provider_ref'      => $providerRef,
+            'match_status'      => self::STATUS_PENDING,
+            'last_checked_at'   => date('Y-m-d H:i:s'),
+        ]);
+        return ['id' => (int)$id, 'created' => true];
+    }
+
+    /** Nombre de rattachements dans un statut donné — utilisé par la vue de synthèse. */
+    public static function countByStatus(string $status): int
+    {
+        return countElementsInTable(self::getTable(), ['match_status' => $status]);
+    }
 }

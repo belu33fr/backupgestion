@@ -22,4 +22,34 @@ class DiscoveryLog extends CommonDBTM
     {
         return _n('Journal de détection', 'Journaux de détection', $nb, 'backupgestion');
     }
+
+    /** Enregistre le résultat d'un passage de la tâche de détection pour un provider. */
+    public static function logRun(int $providersId, string $status, int $found, int $matched, int $pending, string $errors = ''): int
+    {
+        $log = new self();
+        return (int)$log->add([
+            'providers_id' => $providersId,
+            'status'       => $status,
+            'found'        => $found,
+            'matched'      => $matched,
+            'pending'      => $pending,
+            'errors'       => $errors,
+        ]);
+    }
+
+    /** Dernières entrées du journal, toutes providers confondus — vue de synthèse. */
+    public static function getRecent(int $limit = 10): array
+    {
+        global $DB;
+
+        $rows = [];
+        foreach ($DB->request([
+            'FROM'  => self::getTable(),
+            'ORDER' => 'date_creation DESC',
+            'LIMIT' => $limit,
+        ]) as $row) {
+            $rows[] = $row;
+        }
+        return $rows;
+    }
 }

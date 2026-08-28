@@ -1,0 +1,112 @@
+{% extends "layout/parts/page_header.html.twig" %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <div class="row row-cards mb-4">
+        <div class="col-sm-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-secondary">{{ __('Providers actifs', 'backupgestion') }}</div>
+                    <div class="h1 mb-0">{{ activeProviders }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-secondary">{{ __('Providers en échec de connexion', 'backupgestion') }}</div>
+                    <div class="h1 mb-0 {{ providersWithFailures > 0 ? 'text-danger' : '' }}">{{ providersWithFailures }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-secondary">{{ __('Appareils rattachés', 'backupgestion') }}</div>
+                    <div class="h1 mb-0">{{ matchedDevices }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-secondary">{{ __('Appareils en attente de rattachement', 'backupgestion') }}</div>
+                    <div class="h1 mb-0 {{ pendingDevices > 0 ? 'text-warning' : '' }}">{{ pendingDevices }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3 class="card-title">{{ __('Volume total de stockage (live)', 'backupgestion') }}</h3>
+        </div>
+        <div class="card-body">
+            <div class="h2">{{ totalStorageGb }} GB</div>
+            <div class="text-secondary">
+                {{ __('Calculé en direct sur', 'backupgestion') }} {{ providersChecked }} {{ __('provider(s) interrogé(s)', 'backupgestion') }}.
+            </div>
+            {% if statsErrors|length %}
+                <div class="alert alert-warning mt-3 mb-0">
+                    <i class="ti ti-alert-triangle me-2"></i>
+                    {{ __('Certains providers n\'ont pas pu être interrogés :', 'backupgestion') }}
+                    <ul class="mb-0">
+                        {% for err in statsErrors %}
+                            <li>{{ err }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">{{ __('Dernières exécutions de la tâche de détection', 'backupgestion') }}</h3>
+        </div>
+        <div class="card-body p-0">
+            {% if recentLogs|length %}
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>{{ __('Date') }}</th>
+                            <th>{{ __('Statut', 'backupgestion') }}</th>
+                            <th>{{ __('Trouvé(s)', 'backupgestion') }}</th>
+                            <th>{{ __('Rattaché(s)', 'backupgestion') }}</th>
+                            <th>{{ __('En attente', 'backupgestion') }}</th>
+                            <th>{{ __('Erreur', 'backupgestion') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for log in recentLogs %}
+                        <tr>
+                            <td>{{ log.date_creation }}</td>
+                            <td>
+                                {% if log.status == 'ok' %}
+                                    <span class="badge bg-success">{{ __('OK') }}</span>
+                                {% else %}
+                                    <span class="badge bg-danger">{{ __('Erreur', 'backupgestion') }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ log.found }}</td>
+                            <td>{{ log.matched }}</td>
+                            <td>{{ log.pending }}</td>
+                            <td>{{ log.errors }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="p-3">
+                    <div class="alert alert-info mb-0">
+                        <i class="ti ti-info-circle me-2"></i>
+                        {{ __('Aucune exécution enregistrée pour le moment — la tâche de détection s\'exécute automatiquement (Configuration > Actions automatiques).', 'backupgestion') }}
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

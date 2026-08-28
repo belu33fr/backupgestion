@@ -4,7 +4,7 @@
  * BackupGestion - Plugin GLPI 11 de visualisation des sauvegardes multi-provider (Acronis en V1)
  */
 
-define('PLUGIN_BACKUPGESTION_VERSION', '0.9.1-dev');
+define('PLUGIN_BACKUPGESTION_VERSION', '0.10.0-dev');
 define('PLUGIN_BACKUPGESTION_MIN_GLPI', '11.0.0');
 define('PLUGIN_BACKUPGESTION_MAX_GLPI', '12.0.0');
 
@@ -13,6 +13,7 @@ use GlpiPlugin\Backupgestion\Provider;
 use GlpiPlugin\Backupgestion\ProviderAccounts;
 use GlpiPlugin\Backupgestion\ProviderAccountsDefaults;
 use GlpiPlugin\Backupgestion\ProviderChildren;
+use GlpiPlugin\Backupgestion\ProviderDashboard;
 use GlpiPlugin\Backupgestion\Right;
 use GlpiPlugin\Backupgestion\StorageSpace;
 
@@ -63,12 +64,17 @@ function plugin_init_backupgestion(): void
     // ci-dessous, sinon les deux onglets coexisteraient en faisant doublon.
     Plugin::registerClass(ProviderAccounts::class, ['addtabon' => Provider::class]);
 
+    // Onglet "Tableau de bord" (jalon 3, CDC 2.1) — appareils, plans, statistiques en
+    // direct depuis l'API, aucune donnée mirrorée.
+    Plugin::registerClass(ProviderDashboard::class, ['addtabon' => Provider::class]);
+
     // Initialiser les droits dans la session courante
     Right::initProfile();
 
-    // NB : tâche CRON (détection périodique des rattachements, 4.7) et pages dashboard
-    // live (plans/appareils/stats) — prochaines étapes du jalon 3, pas encore dans ce
-    // squelette (StorageSpace, lui, est posé).
+    // Jalon 3 complet : tâche CRON de détection périodique des rattachements (4.7,
+    // classe DiscoveryTask, enregistrée dans hook.php/plugin_backupgestion_migrate())
+    // + pages dashboard live par provider (onglet ci-dessus) et vue de synthèse globale
+    // (front/dashboard.php).
 }
 
 function plugin_version_backupgestion(): array

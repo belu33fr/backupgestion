@@ -32,7 +32,35 @@ interface ProviderInterface
      */
     public function testConnection(): bool;
 
-    // listStorages(), listDevices(), listBackupPlans(), listBackupStats() — jalon 3
-    // (live query, CDC 2.1/4.3) : volontairement absents tant que jalon 2 n'est pas
-    // validé (authentification d'abord, données ensuite).
+    /**
+     * Liste les appareils (agents) visibles depuis le tenant de ce provider — appel
+     * en direct, jamais mirroré localement (CDC 2.1). Chaque élément doit au minimum
+     * porter une clé 'id' (identité réelle côté provider, utilisée comme provider_ref
+     * pour DeviceLink) et 'name' (libellé lisible).
+     *
+     * @throws \RuntimeException si l'appel API échoue.
+     */
+    public function listDevices(): array;
+
+    /**
+     * Liste les plans de sauvegarde (backup plans) définis côté provider — appel en
+     * direct, jamais mirroré localement (CDC 2.1).
+     *
+     * @throws \RuntimeException si l'appel API échoue.
+     */
+    public function listBackupPlans(): array;
+
+    /**
+     * Statistiques d'usage (volume, etc.) du tenant de ce provider — appel en
+     * direct, jamais mirroré localement (CDC 2.1).
+     *
+     * @throws \RuntimeException si l'appel API échoue.
+     */
+    public function listBackupStats(): array;
+
+    // listStorages() — espaces de stockage Acronis natifs découverts côté API —
+    // volontairement absent en V1 (jalon 3) : l'endpoint exact de découverte des
+    // vaults/ressources de stockage natives n'a pas pu être confirmé avec certitude
+    // dans la documentation Acronis à ce stade. La création manuelle des espaces de
+    // stockage (nas/file/s3) reste pleinement fonctionnelle en attendant.
 }

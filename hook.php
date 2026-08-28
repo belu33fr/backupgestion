@@ -326,6 +326,19 @@ function plugin_backupgestion_migrate(): void
         ");
     }
 
+    // Tâche périodique de détection des rattachements (CDC 4.7) — CronTask::register()
+    // vérifie lui-même l'existence avant de créer, donc sûr à rappeler à chaque
+    // migrate()/activate() (même logique que pour les tables ci-dessus).
+    \CronTask::register(
+        \GlpiPlugin\Backupgestion\DiscoveryTask::class,
+        'detection',
+        HOUR_TIMESTAMP,
+        [
+            'comment' => __('Détecte les appareils Acronis non encore rattachés à un équipement GLPI.', 'backupgestion'),
+            'mode'    => \CronTask::MODE_EXTERNAL,
+        ]
+    );
+
     // Type de compte Accounts dédié (catégorie b — CDC 4.4/4.4 bis), créé de façon
     // best-effort : si le plugin Accounts est absent ou si la table n'a pas la forme
     // attendue, on ignore silencieusement plutôt que de bloquer install/activate — un

@@ -346,16 +346,22 @@ class Provider extends CommonDBTM
      */
     public static function getAdditionalMenuLinks()
     {
-        if (!StorageSpace::canView()) {
-            return false;
+        $links = [];
+
+        if (StorageSpace::canView()) {
+            $label = htmlescape(StorageSpace::getTypeName(Session::getPluralNumber()));
+            $icon  = StorageSpace::getIcon();
+            $links["<i class='$icon pointer' title=\"$label\"></i>
+                <span class='d-none d-xxl-block ps-1'>$label</span>"] = StorageSpace::getSearchURL(false);
         }
 
-        $label = htmlescape(StorageSpace::getTypeName(Session::getPluralNumber()));
-        $icon  = StorageSpace::getIcon();
-        $link  = "<i class='$icon pointer' title=\"$label\"></i>
-            <span class='d-none d-xxl-block ps-1'>$label</span>";
+        if (self::canView()) {
+            $label = htmlescape(__('Vue de synthèse', 'backupgestion'));
+            $links["<i class='ti ti-layout-dashboard pointer' title=\"$label\"></i>
+                <span class='d-none d-xxl-block ps-1'>$label</span>"] = Plugin::getWebDir('backupgestion', false) . '/front/dashboard.php';
+        }
 
-        return [$link => StorageSpace::getSearchURL(false)];
+        return count($links) ? $links : false;
     }
 
     public static function getAdditionalMenuOptions()

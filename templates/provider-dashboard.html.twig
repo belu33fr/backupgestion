@@ -1,0 +1,133 @@
+{% import "components/form/fields_macros.html.twig" as fields %}
+
+<div class="mb-4">
+    {% if errors.global is defined %}
+        <div class="alert alert-danger">
+            <i class="ti ti-alert-circle me-2"></i>
+            {{ errors.global }}
+        </div>
+    {% else %}
+
+        {# ---------------------------------------------------------------- #}
+        {# Appareils #}
+        {# ---------------------------------------------------------------- #}
+        {{ fields.smallTitle(__('Appareils', 'backupgestion')) }}
+        {% if errors.devices is defined %}
+            <div class="alert alert-warning">
+                <i class="ti ti-alert-triangle me-2"></i>
+                {{ errors.devices }}
+            </div>
+        {% elseif devices is not null %}
+            {% if devices|length %}
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>{{ __('Nom') }}</th>
+                            <th>{{ __('Statut', 'backupgestion') }}</th>
+                            <th>{{ __('Plateforme', 'backupgestion') }}</th>
+                            <th>{{ __('Tenant', 'backupgestion') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for device in devices %}
+                        <tr>
+                            <td>{{ device.name }}</td>
+                            <td>
+                                {% if device.online %}
+                                    <span class="badge bg-success">{{ __('En ligne', 'backupgestion') }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ __('Hors ligne', 'backupgestion') }}</span>
+                                {% endif %}
+                                {% if not device.enabled %}
+                                    <span class="badge bg-warning">{{ __('Désactivé', 'backupgestion') }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ device.platform }}</td>
+                            <td>{{ device.tenant }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="alert alert-info"><i class="ti ti-info-circle me-2"></i>{{ __('Aucun appareil trouvé.', 'backupgestion') }}</div>
+            {% endif %}
+        {% endif %}
+
+        {# ---------------------------------------------------------------- #}
+        {# Plans de sauvegarde #}
+        {# ---------------------------------------------------------------- #}
+        {{ fields.smallTitle(__('Plans de sauvegarde', 'backupgestion')) }}
+        {% if errors.plans is defined %}
+            <div class="alert alert-warning">
+                <i class="ti ti-alert-triangle me-2"></i>
+                {{ errors.plans }}
+            </div>
+        {% elseif plans is not null %}
+            {% if plans|length %}
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>{{ __('Nom') }}</th>
+                            <th>{{ __('Type', 'backupgestion') }}</th>
+                            <th>{{ __('Statut', 'backupgestion') }}</th>
+                            <th>{{ __('Dernière modification', 'backupgestion') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for plan in plans %}
+                        <tr>
+                            <td>{{ plan.name }}</td>
+                            <td>{{ plan.type }}</td>
+                            <td>
+                                {% if plan.enabled %}
+                                    <span class="badge bg-success">{{ __('Actif') }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ __('Inactif') }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ plan.updated_at }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="alert alert-info"><i class="ti ti-info-circle me-2"></i>{{ __('Aucun plan de sauvegarde trouvé.', 'backupgestion') }}</div>
+            {% endif %}
+        {% endif %}
+
+        {# ---------------------------------------------------------------- #}
+        {# Statistiques #}
+        {# ---------------------------------------------------------------- #}
+        {{ fields.smallTitle(__('Statistiques d\'usage', 'backupgestion')) }}
+        {% if errors.stats is defined %}
+            <div class="alert alert-warning">
+                <i class="ti ti-alert-triangle me-2"></i>
+                {{ errors.stats }}
+            </div>
+        {% elseif stats is not null %}
+            {% if stats|length %}
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>{{ __('Mesure', 'backupgestion') }}</th>
+                            <th>{{ __('Valeur', 'backupgestion') }}</th>
+                            <th>{{ __('Unité', 'backupgestion') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for stat in stats %}
+                        <tr>
+                            <td>{{ stat.name }}</td>
+                            <td>{{ stat.value }}</td>
+                            <td>{{ stat.unit }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="alert alert-info"><i class="ti ti-info-circle me-2"></i>{{ __('Aucune statistique disponible.', 'backupgestion') }}</div>
+            {% endif %}
+        {% endif %}
+
+    {% endif %}
+</div>
