@@ -199,13 +199,14 @@ class StorageSpace extends CommonDBTM
     public static function getConnectionFields(string $storageType): array
     {
         return match ($storageType) {
-            // Seule l'adresse est obligatoire : ce formulaire ne décrit que "comment on
-            // s'y connecte" (paramètres d'accès non sensibles) — le rattachement précis
-            // à un équipement/emplacement de sauvegarde est du ressort du jalon 4.
-            // Identifiant/mot de passe ont été retirés (retour de Luc) : les
-            // identifiants d'un espace de stockage sont désormais exclusivement gérés
-            // via l'onglet "Comptes" (liaison à des comptes Accounts existants), pour
-            // éviter de dupliquer la gestion des secrets à deux endroits différents.
+            // Principe général (retour de Luc) : par défaut, tout identifiant/secret
+            // passe par l'onglet "Comptes" (liaison à des comptes Accounts existants —
+            // login, clé d'accès, clé secrète, clé de chiffrement…), jamais par un champ
+            // de connexion en clair/chiffré ici. ConnectionFields ne décrit donc plus que
+            // "comment on s'y connecte" (paramètres non sensibles : adresse, partage,
+            // endpoint, bucket…) — un futur backend qui aurait vraiment besoin d'un
+            // secret propre à lui (cas spécifique, hors du modèle "compte Accounts")
+            // resterait la seule exception à ce principe.
             'nas' => [
                 'host'  => ['label' => __('Hôte / adresse', 'backupgestion'), 'type' => 'text', 'required' => true],
                 'share' => ['label' => __('Partage', 'backupgestion'), 'type' => 'text', 'required' => false],
@@ -214,10 +215,8 @@ class StorageSpace extends CommonDBTM
                 'path' => ['label' => __('Chemin local', 'backupgestion'), 'type' => 'text', 'required' => true],
             ],
             's3' => [
-                'endpoint'   => ['label' => __('Endpoint', 'backupgestion'), 'type' => 'text', 'required' => true],
-                'bucket'     => ['label' => __('Bucket', 'backupgestion'), 'type' => 'text', 'required' => true],
-                'access_key' => ['label' => __('Access key', 'backupgestion'), 'type' => 'text', 'required' => true],
-                'secret_key' => ['label' => __('Secret key', 'backupgestion'), 'type' => 'password', 'required' => true],
+                'endpoint' => ['label' => __('Endpoint', 'backupgestion'), 'type' => 'text', 'required' => true],
+                'bucket'   => ['label' => __('Bucket', 'backupgestion'), 'type' => 'text', 'required' => true],
             ],
             default => [],
         };
