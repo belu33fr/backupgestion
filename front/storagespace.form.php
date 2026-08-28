@@ -12,9 +12,12 @@ if (!StorageSpace::canView()) {
 $storage = new StorageSpace();
 
 if (isset($_POST['link_account'])) {
-    // Lie un compte Accounts EXISTANT à cet espace de stockage avec un rôle libre
-    // (onglet "Comptes" — CDC 2.1, jalon 3 : un espace de stockage peut avoir
-    // plusieurs comptes : identifiant, admin, clé de chiffrement…).
+    // Lie un compte Accounts EXISTANT à cet espace de stockage (onglet "Comptes" —
+    // CDC 2.1, jalon 3 : un espace de stockage peut avoir plusieurs comptes :
+    // identifiant, admin, clé de chiffrement…). Pas de "rôle" saisi ici : c'est le
+    // "Type de compte" natif d'Accounts qui porte déjà cette information — role est
+    // conservé côté schéma (compatibilité) mais toujours vide depuis cet écran
+    // (retour de Luc).
     header('Content-Type: application/json');
     $id = (int)($_POST['id'] ?? 0);
     if (!$storage->getFromDB($id) || !$storage->can($id, UPDATE)) {
@@ -22,16 +25,11 @@ if (isset($_POST['link_account'])) {
         exit;
     }
     $accountId = (int)($_POST['plugin_accounts_accounts_id'] ?? 0);
-    $role      = trim((string)($_POST['role'] ?? ''));
     if ($accountId <= 0) {
         echo json_encode(['success' => false, 'message' => __('Veuillez sélectionner un compte.', 'backupgestion')]);
         exit;
     }
-    if ($role === '') {
-        echo json_encode(['success' => false, 'message' => __('Veuillez indiquer un rôle.', 'backupgestion')]);
-        exit;
-    }
-    $linkId = StorageAccount::linkAccount($id, $role, $accountId);
+    $linkId = StorageAccount::linkAccount($id, '', $accountId);
     echo json_encode(['success' => $linkId > 0, 'link_id' => $linkId]);
     exit;
 

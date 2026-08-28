@@ -199,15 +199,16 @@ class StorageSpace extends CommonDBTM
     public static function getConnectionFields(string $storageType): array
     {
         return match ($storageType) {
-            // Seule l'adresse est obligatoire : à ce stade (jalon 3), on ne décrit que
-            // "comment on s'y connecte" — partage/identifiant/mot de passe restent
-            // facultatifs, le rattachement précis à un équipement/emplacement de
-            // sauvegarde étant du ressort du jalon 4 (retour de Luc).
+            // Seule l'adresse est obligatoire : ce formulaire ne décrit que "comment on
+            // s'y connecte" (paramètres d'accès non sensibles) — le rattachement précis
+            // à un équipement/emplacement de sauvegarde est du ressort du jalon 4.
+            // Identifiant/mot de passe ont été retirés (retour de Luc) : les
+            // identifiants d'un espace de stockage sont désormais exclusivement gérés
+            // via l'onglet "Comptes" (liaison à des comptes Accounts existants), pour
+            // éviter de dupliquer la gestion des secrets à deux endroits différents.
             'nas' => [
-                'host'     => ['label' => __('Hôte / adresse', 'backupgestion'), 'type' => 'text', 'required' => true],
-                'share'    => ['label' => __('Partage', 'backupgestion'), 'type' => 'text', 'required' => false],
-                'login'    => ['label' => __('Identifiant', 'backupgestion'), 'type' => 'text', 'required' => false],
-                'password' => ['label' => __('Mot de passe', 'backupgestion'), 'type' => 'password', 'required' => false],
+                'host'  => ['label' => __('Hôte / adresse', 'backupgestion'), 'type' => 'text', 'required' => true],
+                'share' => ['label' => __('Partage', 'backupgestion'), 'type' => 'text', 'required' => false],
             ],
             'file' => [
                 'path' => ['label' => __('Chemin local', 'backupgestion'), 'type' => 'text', 'required' => true],

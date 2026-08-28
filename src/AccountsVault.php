@@ -402,8 +402,22 @@ class AccountsVault
         }
 
         $row = $DB->request([
-            'FROM'  => 'glpi_plugin_accounts_accounts',
-            'WHERE' => ['id' => $accountId],
+            'SELECT'    => [
+                'glpi_plugin_accounts_accounts.id',
+                'glpi_plugin_accounts_accounts.name',
+                'glpi_plugin_accounts_accounts.login',
+                'glpi_plugin_accounts_accounttypes.name AS type_name',
+            ],
+            'FROM'      => 'glpi_plugin_accounts_accounts',
+            'LEFT JOIN' => [
+                'glpi_plugin_accounts_accounttypes' => [
+                    'ON' => [
+                        'glpi_plugin_accounts_accounts'     => 'plugin_accounts_accounttypes_id',
+                        'glpi_plugin_accounts_accounttypes' => 'id',
+                    ],
+                ],
+            ],
+            'WHERE' => ['glpi_plugin_accounts_accounts.id' => $accountId],
         ])->current();
 
         if (!$row) {
@@ -414,7 +428,114 @@ class AccountsVault
             'id'    => (int)$row['id'],
             'name'  => (string)($row['name'] ?? ''),
             'login' => (string)($row['login'] ?? ''),
+            'type'  => (string)($row['type_name'] ?? ''),
         ];
+    }
+
+    /**
+     * Liste des comptes Accounts visibles pour une entité (elle-même + ancêtres
+     * récursifs), avec un libellé enrichi "Nom — Type · lié à : X, Y" — retour de Luc
+     * (onglet Comptes de StorageSpace) : le nom seul ne suffit pas à distinguer des
+     * comptes, il faut voir le type de compte et les éléments déjà liés (Account_Item).
+     *
+     * @return array<int, string> id => libellé, prêt pour Dropdown::showFromArray().
+     */
+    public static function listAccountsForDropdown(int $entities_id): array
+    {
+        global $DB;
+
+        if (!self::isAvailable() || !$DB->tableExists('glpi_plugin_accounts_accounts')) {
+            return [];
+        }
+
+        $ancestors = self::getAncestorEntityIds($entities_id);
+        if ($DB->fieldExists('glpi_plugin_accounts_accounts', 'is_recursive')) {
+            $where = [
+                'OR' => [
+                    ['glpi_plugin_accounts_accounts.entities_id' => $entities_id],
+                    ['glpi_plugin_accounts_accounts.entities_id' => $ancestors, 'glpi_plugin_accounts_accounts.is_recursive' => 1],
+                ],
+            ];
+        } else {
+            $where = ['glpi_plugin_accounts_accounts.entities_id' => array_merge([$entities_id], $ancestors)];
+        }
+
+        $accounts = [];
+        foreach ($DB->request([
+            'SELECT'    => [
+                'glpi_plugin_accounts_accounts.id',
+                'glpi_plugin_accounts_accounts.name',
+                'glpi_plugin_accounts_accounts.login',
+                'glpi_plugin_accounts_accounttypes.name AS type_name',
+            ],
+            'FROM'      => 'glpi_plugin_accounts_accounts',
+            'LEFT JOIN' => [
+                'glpi_plugin_accounts_accounttypes' => [
+                    'ON' => [
+                        'glpi_plugin_accounts_accounts'     => 'plugin_accounts_accounttypes_id',
+                        'glpi_plugin_accounts_accounttypes' => 'id',
+                    ],
+                ],
+            ],
+            'WHERE' => $where,
+            'ORDER' => 'glpi_plugin_accounts_accounts.name ASC',
+        ]) as $row) {
+            $accounts[(int)$row['id']] = [
+                'name'  => (string)($row['name'] ?? ''),
+                'type'  => (string)($row['type_name'] ?? ''),
+                'links' => [],
+            ];
+        }
+
+        if (empty($accounts)) {
+            return [];
+        }
+
+        if ($DB->tableExists('glpi_plugin_accounts_accounts_items')) {
+            foreach ($DB->request([
+                'FROM'  => 'glpi_plugin_accounts_accounts_items',
+                'WHERE' => ['plugin_accounts_accounts_id' => array_keys($accounts)],
+            ]) as $link) {
+                $accountId = (int)$link['plugin_accounts_accounts_id'];
+                $itemtype  = (string)($link['itemtype'] ?? '');
+                $itemsId   = (int)($link['items_id'] ?? 0);
+                if (!isset($accounts[$accountId]) || $itemtype === '' || !class_exists($itemtype)) {
+                    continue;
+                }
+                try {
+                    $itemName = \Dropdown::getDropdownName($itemtype::getTable(), $itemsId);
+                } catch (\Throwable $e) {
+                    $itemName = '';
+                }
+                if ($itemName !== '' && $itemName !== '&nbsp;') {
+                    $accounts[$accountId]['links'][] = $itemName;
+                }
+            }
+        }
+
+        $out = [];
+        foreach ($accounts as $id => $account) {
+            $out[$id] = self::formatAccountDropdownLabel($account);
+        }
+        return $out;
+    }
+
+    private static function formatAccountDropdownLabel(array $account): string
+    {
+        $label = $account['name'] !== '' ? $account['name'] : __('(sans nom)', 'backupgestion');
+
+        $meta = [];
+        if ($account['type'] !== '') {
+            $meta[] = $account['type'];
+        }
+        if (!empty($account['links'])) {
+            $meta[] = sprintf(__('lié à : %s', 'backupgestion'), implode(', ', $account['links']));
+        }
+        if (!empty($meta)) {
+            $label .= ' — ' . implode(' · ', $meta);
+        }
+
+        return $label;
     }
 
     // ------------------------------------------------------------------

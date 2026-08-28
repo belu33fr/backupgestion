@@ -28,7 +28,7 @@
     </div>
 
     {% if item.fields['storage_type'] != 'acronis' %}
-        {{ fields.smallTitle(__('Paramètres de connexion (chiffrés localement)', 'backupgestion')) }}
+        {{ fields.smallTitle(__('Paramètres d\'accès', 'backupgestion')) }}
 
         <div id="bg-connection-fields">
             {% for key, def in connectionFields %}
@@ -63,7 +63,7 @@
     {% if item.fields['id'] %}
         <div class="alert alert-info mt-2">
             <i class="ti ti-info-circle me-2"></i>
-            {{ __("Les comptes Accounts liés à cet espace de stockage (accès, chiffrement…) et la consultation live de son occupation seront disponibles dans une prochaine étape.", 'backupgestion') }}
+            {{ __("Les identifiants (identifiant de connexion, compte administrateur, clé de chiffrement…) se gèrent depuis l'onglet \"Comptes\" de cette fiche, en les liant à des comptes Accounts existants.", 'backupgestion') }}
         </div>
     {% endif %}
 

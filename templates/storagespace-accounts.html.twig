@@ -2,22 +2,48 @@
 
 <div class="mb-4">
 
+    {% if canUpdate %}
+        {{ fields.smallTitle(__('Lier un compte existant', 'backupgestion')) }}
+
+        <div class="alert alert-info">
+            <i class="ti ti-info-circle me-2"></i>
+            {{ __('Relie un compte déjà créé dans Accounts (identifiant de connexion, compte administrateur, clé de chiffrement…) à cet espace de stockage. Un même compte peut être partagé entre plusieurs éléments — le type de compte est celui défini dans Accounts.', 'backupgestion') }}
+        </div>
+
+        <div class="mb-3 row">
+            <label class="col-xxl-4 col-form-label">{{ __('Compte Accounts', 'backupgestion') }}</label>
+            <div class="col-xxl-8 d-flex align-items-center gap-1" id="bg-storageaccount-picker">
+                <div class="flex-grow-1">{{ accountPicker|raw }}</div>
+                {% if accountInfoIcon %}{{ accountInfoIcon|raw }}{% endif %}
+                {% if addAccountIcon %}{{ addAccountIcon|raw }}{% endif %}
+            </div>
+        </div>
+        <div class="col-12 mb-3 d-flex gap-2 flex-wrap align-items-center">
+            <button type="button" id="bg-btn-link-account" class="btn btn-primary"
+                    data-storage-id="{{ item.fields['id'] }}" data-url="{{ webdir }}/front/storagespace.form.php">
+                <i class="ti ti-link me-1"></i>{{ __('Lier', 'backupgestion') }}
+            </button>
+            <span id="bg-storageaccount-link-result"></span>
+        </div>
+
+        <hr class="my-4" />
+    {% endif %}
+
     {{ fields.smallTitle(__('Comptes liés', 'backupgestion')) }}
 
     {% if links|length %}
         <table class="table table-sm">
             <thead>
                 <tr>
-                    <th>{{ __('Rôle', 'backupgestion') }}</th>
                     <th>{{ __('Compte', 'backupgestion') }}</th>
                     <th>{{ __('Identifiant', 'backupgestion') }}</th>
+                    <th>{{ __('Type', 'backupgestion') }}</th>
                     {% if canUpdate %}<th class="text-end">{{ __('Actions') }}</th>{% endif %}
                 </tr>
             </thead>
             <tbody>
             {% for link in links %}
                 <tr>
-                    <td><span class="badge bg-azure-lt">{{ link.role_label }}</span></td>
                     <td>
                         {% if link.account_found %}
                             {{ link.account_name }}
@@ -29,6 +55,7 @@
                         {% endif %}
                     </td>
                     <td>{{ link.account_login }}</td>
+                    <td>{% if link.account_type %}<span class="badge bg-azure-lt">{{ link.account_type }}</span>{% endif %}</td>
                     {% if canUpdate %}
                         <td class="text-end">
                             <button type="button" class="btn btn-sm btn-outline-danger bg-storageaccount-unlink"
@@ -50,46 +77,6 @@
     {% endif %}
 
     {% if canUpdate %}
-        <hr class="my-4" />
-        {{ fields.smallTitle(__('Lier un compte existant', 'backupgestion')) }}
-
-        <div class="alert alert-info">
-            <i class="ti ti-info-circle me-2"></i>
-            {{ __('Relie un compte déjà créé dans Accounts (identifiant de connexion, compte administrateur, clé de chiffrement…) à cet espace de stockage, avec un rôle. Un même compte peut être partagé entre plusieurs éléments.', 'backupgestion') }}
-        </div>
-
-        <div class="mb-3 row">
-            <label class="col-xxl-4 col-form-label">{{ __('Compte Accounts', 'backupgestion') }}</label>
-            <div class="col-xxl-8 d-flex align-items-center gap-1" id="bg-storageaccount-picker">
-                <div class="flex-grow-1">{{ accountPicker|raw }}</div>
-                {% if addAccountIcon %}{{ addAccountIcon|raw }}{% endif %}
-            </div>
-        </div>
-        <div class="mb-3 row">
-            <label class="col-xxl-4 col-form-label">{{ __('Rôle', 'backupgestion') }}</label>
-            <div class="col-xxl-8">
-                <select id="bg-storageaccount-role" class="form-select">
-                    {% for key, label in rolePresets %}
-                        <option value="{{ key }}">{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </div>
-        <div class="mb-3 row" id="bg-storageaccount-role-other-row" style="display:none;">
-            <label class="col-xxl-4 col-form-label">{{ __('Rôle personnalisé', 'backupgestion') }}</label>
-            <div class="col-xxl-8">
-                <input type="text" id="bg-storageaccount-role-other" class="form-control"
-                       placeholder="{{ __('Ex. Compte support éditeur', 'backupgestion') }}" />
-            </div>
-        </div>
-        <div class="col-12 mb-3 d-flex gap-2 flex-wrap align-items-center">
-            <button type="button" id="bg-btn-link-account" class="btn btn-primary"
-                    data-storage-id="{{ item.fields['id'] }}" data-url="{{ webdir }}/front/storagespace.form.php">
-                <i class="ti ti-link me-1"></i>{{ __('Lier', 'backupgestion') }}
-            </button>
-            <span id="bg-storageaccount-link-result"></span>
-        </div>
-
         <script>
         (function() {
             var csrfMeta = document.querySelector("meta[property='glpi:csrf_token']");
@@ -118,49 +105,26 @@
                 });
             }
 
-            var roleSelect  = document.getElementById('bg-storageaccount-role');
-            var roleOtherRow = document.getElementById('bg-storageaccount-role-other-row');
-            var roleOtherInput = document.getElementById('bg-storageaccount-role-other');
-
-            function syncRoleOtherVisibility() {
-                var isOther = roleSelect && roleSelect.value === 'other';
-                roleOtherRow.style.display = isOther ? '' : 'none';
-            }
-            if (roleSelect) {
-                roleSelect.addEventListener('change', syncRoleOtherVisibility);
-                syncRoleOtherVisibility();
-            }
-
             var linkBtn = document.getElementById('bg-btn-link-account');
             if (linkBtn) {
                 linkBtn.addEventListener('click', function() {
                     var resultEl = document.getElementById('bg-storageaccount-link-result');
 
-                    // Le picker de compte est rendu par Dropdown::show() (select2 GLPI
-                    // standard) : on récupère sa valeur via le select natif qu'il génère,
-                    // nommé "plugin_accounts_accounts_id" dans le conteneur dédié.
+                    // Le picker de compte est rendu par Dropdown::showFromArray() : on
+                    // récupère sa valeur via le select natif nommé
+                    // "plugin_accounts_accounts_id" dans le conteneur dédié.
                     var pickerSelect = document.querySelector('#bg-storageaccount-picker select[name="plugin_accounts_accounts_id"]');
                     var accountId = pickerSelect ? pickerSelect.value : '';
 
-                    var role = roleSelect.value;
-                    if (role === 'other') {
-                        role = roleOtherInput.value.trim();
-                    }
-
                     if (!accountId) {
                         resultEl.innerHTML = "<span class='badge bg-danger'>" + {{ __('Sélectionnez un compte.', 'backupgestion')|json_encode|raw }} + "</span>";
-                        return;
-                    }
-                    if (!role) {
-                        resultEl.innerHTML = "<span class='badge bg-danger'>" + {{ __('Indiquez un rôle.', 'backupgestion')|json_encode|raw }} + "</span>";
                         return;
                     }
 
                     postForm(linkBtn, resultEl, {
                         link_account: '1',
                         id: linkBtn.dataset.storageId,
-                        plugin_accounts_accounts_id: accountId,
-                        role: role
+                        plugin_accounts_accounts_id: accountId
                     }, function(d, el) {
                         el.innerHTML = "<span class='badge bg-success'>" + {{ __('Compte lié', 'backupgestion')|json_encode|raw }} + "</span>";
                         setTimeout(function() { window.location.reload(); }, 900);
