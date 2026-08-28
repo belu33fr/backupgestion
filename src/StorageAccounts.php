@@ -55,9 +55,10 @@ class StorageAccounts extends CommonGLPI
             ];
         }
 
-        $accountPicker    = '';
-        $accountInfoIcon  = '';
-        $addAccountIcon   = '';
+        $accountPicker      = '';
+        $accountInfoIcon    = '';
+        $addAccountIcon     = '';
+        $availableAccounts  = [];
 
         if (class_exists('\GlpiPlugin\Accounts\Account')) {
             $rand      = mt_rand();
@@ -71,7 +72,15 @@ class StorageAccounts extends CommonGLPI
             // nom brut) : on la reconstruit juste après, à l'identique du mécanisme
             // natif (Ajax::updateItemOnSelectEvent + Html::showToolTip), pour conserver
             // le même comportement que Luc a confirmé fonctionnel.
-            $accountPicker = \Dropdown::showFromArray($fieldName, AccountsVault::listAccountsForDropdown($entitiesId), [
+            //
+            // Portée entité + ancêtres récursifs (même convention que les empreintes
+            // Accounts déjà utilisée ailleurs dans le plugin) : un compte créé sur une
+            // entité soeur/enfant, ou une entité parente non marquée récursive, n'est
+            // délibérément pas proposé ici — s'il devrait l'être, c'est cette portée
+            // qu'il faut ajuster.
+            $availableAccounts = AccountsVault::listAccountsForDropdown($entitiesId);
+
+            $accountPicker = \Dropdown::showFromArray($fieldName, $availableAccounts, [
                 'value'               => 0,
                 'rand'                => $rand,
                 'width'               => '100%',
@@ -134,10 +143,11 @@ class StorageAccounts extends CommonGLPI
         \Glpi\Application\View\TemplateRenderer::getInstance()->display(
             '@backupgestion/storagespace-accounts.html.twig',
             [
-                'item'            => $item,
-                'links'           => $links,
-                'accountPicker'   => $accountPicker,
-                'accountInfoIcon' => $accountInfoIcon,
+                'item'               => $item,
+                'links'              => $links,
+                'availableAccounts'  => $availableAccounts,
+                'accountPicker'      => $accountPicker,
+                'accountInfoIcon'    => $accountInfoIcon,
                 'addAccountIcon'  => $addAccountIcon,
                 'webdir'          => Plugin::getWebDir('backupgestion'),
                 'canUpdate'       => StorageSpace::canUpdate(),
