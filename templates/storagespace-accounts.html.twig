@@ -60,8 +60,9 @@
 
         <div class="mb-3 row">
             <label class="col-xxl-4 col-form-label">{{ __('Compte Accounts', 'backupgestion') }}</label>
-            <div class="col-xxl-8" id="bg-storageaccount-picker">
-                {{ accountPicker|raw }}
+            <div class="col-xxl-8 d-flex align-items-center gap-1" id="bg-storageaccount-picker">
+                <div class="flex-grow-1">{{ accountPicker|raw }}</div>
+                {% if addAccountIcon %}{{ addAccountIcon|raw }}{% endif %}
             </div>
         </div>
         <div class="mb-3 row">

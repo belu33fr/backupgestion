@@ -199,9 +199,13 @@ class StorageSpace extends CommonDBTM
     public static function getConnectionFields(string $storageType): array
     {
         return match ($storageType) {
+            // Seule l'adresse est obligatoire : à ce stade (jalon 3), on ne décrit que
+            // "comment on s'y connecte" — partage/identifiant/mot de passe restent
+            // facultatifs, le rattachement précis à un équipement/emplacement de
+            // sauvegarde étant du ressort du jalon 4 (retour de Luc).
             'nas' => [
                 'host'     => ['label' => __('Hôte / adresse', 'backupgestion'), 'type' => 'text', 'required' => true],
-                'share'    => ['label' => __('Partage', 'backupgestion'), 'type' => 'text', 'required' => true],
+                'share'    => ['label' => __('Partage', 'backupgestion'), 'type' => 'text', 'required' => false],
                 'login'    => ['label' => __('Identifiant', 'backupgestion'), 'type' => 'text', 'required' => false],
                 'password' => ['label' => __('Mot de passe', 'backupgestion'), 'type' => 'password', 'required' => false],
             ],

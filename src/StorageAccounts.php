@@ -55,7 +55,8 @@ class StorageAccounts extends CommonGLPI
             ];
         }
 
-        $accountPicker = '';
+        $accountPicker  = '';
+        $addAccountIcon = '';
         if (class_exists('\GlpiPlugin\Accounts\Account')) {
             $accountPicker = \Dropdown::show(\GlpiPlugin\Accounts\Account::class, [
                 'name'        => 'plugin_accounts_accounts_id',
@@ -65,17 +66,38 @@ class StorageAccounts extends CommonGLPI
                 'rand'        => mt_rand(),
                 'display'     => false,
             ]);
+
+            // Bouton "+" pour créer un compte à la volée sans quitter la fiche — même
+            // mécanisme que celui que GLPI construit lui-même pour les CommonDropdown
+            // dans Dropdown::show() (icône + modal iframe), reproduit ici à la main car
+            // Account (Accounts) est un CommonDBTM classique, pas un CommonDropdown,
+            // et n'en bénéficie donc pas automatiquement (retour de Luc). L'icône "i"
+            // (voir/rechercher le compte), elle, est déjà fournie nativement par
+            // Dropdown::show() (option 'comments', activée par défaut) — rien à ajouter.
+            $accountItem = new \GlpiPlugin\Accounts\Account();
+            if ($accountItem::canCreate()) {
+                $addDomId = 'add_storageaccount_' . mt_rand();
+                $addAccountIcon = '<div class="btn btn-outline-secondary" title="' . __s('Ajouter un compte', 'backupgestion') . '" data-bs-toggle="modal" data-bs-target="#' . $addDomId . '">';
+                $addAccountIcon .= \Ajax::createIframeModalWindow(
+                    $addDomId,
+                    \GlpiPlugin\Accounts\Account::getFormURL(),
+                    ['display' => false, 'reloadonclose' => true]
+                );
+                $addAccountIcon .= "<span data-bs-toggle='tooltip'><i class='ti ti-plus'></i><span class='sr-only'>" . __s('Ajouter un compte', 'backupgestion') . "</span></span>";
+                $addAccountIcon .= '</div>';
+            }
         }
 
         \Glpi\Application\View\TemplateRenderer::getInstance()->display(
             '@backupgestion/storagespace-accounts.html.twig',
             [
-                'item'          => $item,
-                'links'         => $links,
-                'rolePresets'   => self::rolePresets(),
-                'accountPicker' => $accountPicker,
-                'webdir'        => Plugin::getWebDir('backupgestion'),
-                'canUpdate'     => StorageSpace::canUpdate(),
+                'item'           => $item,
+                'links'          => $links,
+                'rolePresets'    => self::rolePresets(),
+                'accountPicker'  => $accountPicker,
+                'addAccountIcon' => $addAccountIcon,
+                'webdir'         => Plugin::getWebDir('backupgestion'),
+                'canUpdate'      => StorageSpace::canUpdate(),
             ]
         );
 
