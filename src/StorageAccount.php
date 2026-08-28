@@ -58,4 +58,22 @@ class StorageAccount extends CommonDBTM
         global $DB;
         $DB->delete(self::getTable(), ['backupgestion_storages_id' => $storageId]);
     }
+
+    public static function countForStorage(int $storageId): int
+    {
+        return countElementsInTable(self::getTable(), ['backupgestion_storages_id' => $storageId]);
+    }
+
+    /**
+     * Supprime un lien role<->compte (pas de corbeille : table de liaison pure, sans
+     * intérêt à conserver un historique — même principe que deleteForStorage()).
+     */
+    public static function unlink(int $linkId): bool
+    {
+        $link = new self();
+        if (!$link->getFromDB($linkId)) {
+            return false;
+        }
+        return (bool)$link->delete(['id' => $linkId], 1);
+    }
 }

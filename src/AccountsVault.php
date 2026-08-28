@@ -386,6 +386,37 @@ class AccountsVault
         return false;
     }
 
+    /**
+     * Résumé non sensible (nom, login) d'un compte Accounts existant — utilisé pour
+     * l'affichage de la liste des comptes liés à un espace de stockage (StorageAccount,
+     * jalon 3), sans jamais exposer le mot de passe/la clé chiffrée. Lecture directe de
+     * la table plutôt que via la classe Account : évite toute dépendance à des méthodes
+     * non publiques d'Accounts pour un simple affichage.
+     */
+    public static function getAccountSummary(int $accountId): ?array
+    {
+        global $DB;
+
+        if (!self::isAvailable() || $accountId <= 0 || !$DB->tableExists('glpi_plugin_accounts_accounts')) {
+            return null;
+        }
+
+        $row = $DB->request([
+            'FROM'  => 'glpi_plugin_accounts_accounts',
+            'WHERE' => ['id' => $accountId],
+        ])->current();
+
+        if (!$row) {
+            return null;
+        }
+
+        return [
+            'id'    => (int)$row['id'],
+            'name'  => (string)($row['name'] ?? ''),
+            'login' => (string)($row['login'] ?? ''),
+        ];
+    }
+
     // ------------------------------------------------------------------
     // Association Account_Item (aucune donnée sensible — simple ligne de liaison)
     // ------------------------------------------------------------------

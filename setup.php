@@ -4,7 +4,7 @@
  * BackupGestion - Plugin GLPI 11 de visualisation des sauvegardes multi-provider (Acronis en V1)
  */
 
-define('PLUGIN_BACKUPGESTION_VERSION', '0.10.0-dev');
+define('PLUGIN_BACKUPGESTION_VERSION', '0.11.0-dev');
 define('PLUGIN_BACKUPGESTION_MIN_GLPI', '11.0.0');
 define('PLUGIN_BACKUPGESTION_MAX_GLPI', '12.0.0');
 
@@ -15,6 +15,7 @@ use GlpiPlugin\Backupgestion\ProviderAccountsDefaults;
 use GlpiPlugin\Backupgestion\ProviderChildren;
 use GlpiPlugin\Backupgestion\ProviderDashboard;
 use GlpiPlugin\Backupgestion\Right;
+use GlpiPlugin\Backupgestion\StorageAccounts;
 use GlpiPlugin\Backupgestion\StorageSpace;
 
 function plugin_init_backupgestion(): void
@@ -67,6 +68,12 @@ function plugin_init_backupgestion(): void
     // Onglet "Tableau de bord" (jalon 3, CDC 2.1) — appareils, plans, statistiques en
     // direct depuis l'API, aucune donnée mirrorée.
     Plugin::registerClass(ProviderDashboard::class, ['addtabon' => Provider::class]);
+
+    // Onglet "Comptes" sur la fiche espace de stockage (jalon 3, CDC 2.1) — liaison
+    // à PLUSIEURS comptes Accounts existants avec un rôle chacun (identifiant, admin,
+    // clé de chiffrement…), via la table StorageAccount. Distinct de ProviderAccounts
+    // (un seul compte "actif" côté provider) — retour de Luc.
+    Plugin::registerClass(StorageAccounts::class, ['addtabon' => StorageSpace::class]);
 
     // Initialiser les droits dans la session courante
     Right::initProfile();
