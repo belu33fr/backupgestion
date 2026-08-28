@@ -10,10 +10,10 @@
             {{ __('Relie un compte déjà créé dans Accounts (identifiant de connexion, compte administrateur, clé de chiffrement…) à cet espace de stockage. Un même compte peut être partagé entre plusieurs éléments — le type de compte est celui défini dans Accounts.', 'backupgestion') }}
         </div>
 
-        {% if availableAccounts|length == 0 %}
+        {% if availableAccountsCount == 0 %}
             <div class="alert alert-warning">
                 <i class="ti ti-alert-triangle me-2"></i>
-                {{ __('Aucun compte Accounts visible pour cette entité (ou ses entités parentes récursives) — la liste ci-dessous est donc vide. Créez-en un avec le bouton "+", ou vérifiez qu\'un compte existant est bien rattaché à la bonne entité côté Accounts.', 'backupgestion') }}
+                {{ __('Aucun compte Accounts visible pour cette entité (ou ses sous-entités) — la liste ci-dessous est donc vide. Créez-en un avec le bouton "+", ou vérifiez qu\'un compte existant est bien rattaché à la bonne entité côté Accounts.', 'backupgestion') }}
             </div>
         {% endif %}
 
@@ -25,6 +25,15 @@
                 {% if addAccountIcon %}{{ addAccountIcon|raw }}{% endif %}
             </div>
         </div>
+
+        {# Popup de création de compte volontairement plus large que le gabarit
+           "modal-xl" standard de GLPI (retour de Luc) — ciblée par sa classe dédiée
+           pour ne pas affecter les autres popups de l'application. #}
+        <style>
+            .modal-dialog.bg-storageaccount-add-modal {
+                max-width: 95vw;
+            }
+        </style>
         <div class="col-12 mb-3 d-flex gap-2 flex-wrap align-items-center">
             <button type="button" id="bg-btn-link-account" class="btn btn-primary"
                     data-storage-id="{{ item.fields['id'] }}" data-url="{{ webdir }}/front/storagespace.form.php">

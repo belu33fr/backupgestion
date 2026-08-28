@@ -73,12 +73,14 @@ class StorageAccounts extends CommonGLPI
             // natif (Ajax::updateItemOnSelectEvent + Html::showToolTip), pour conserver
             // le même comportement que Luc a confirmé fonctionnel.
             //
-            // Portée entité + ancêtres récursifs (même convention que les empreintes
-            // Accounts déjà utilisée ailleurs dans le plugin) : un compte créé sur une
-            // entité soeur/enfant, ou une entité parente non marquée récursive, n'est
-            // délibérément pas proposé ici — s'il devrait l'être, c'est cette portée
-            // qu'il faut ajuster.
+            // Groupé par entité (retour de Luc) — listAccountsForDropdown() renvoie une
+            // structure à deux niveaux (nom d'entité => [id => libellé]), rendue en
+            // optgroups par showFromArray().
             $availableAccounts = AccountsVault::listAccountsForDropdown($entitiesId);
+            $availableAccountsCount = 0;
+            foreach ($availableAccounts as $group) {
+                $availableAccountsCount += count($group);
+            }
 
             $accountPicker = \Dropdown::showFromArray($fieldName, $availableAccounts, [
                 'value'               => 0,
@@ -133,7 +135,18 @@ class StorageAccounts extends CommonGLPI
                 $addAccountIcon .= \Ajax::createIframeModalWindow(
                     $addDomId,
                     $addFormURL,
-                    ['display' => false, 'reloadonclose' => true]
+                    [
+                        'display'       => false,
+                        'reloadonclose' => true,
+                        // Popup nettement plus grande que la taille par défaut de GLPI
+                        // (retour de Luc) — le formulaire de compte (onglets, champs
+                        // chiffrement) est à l'étroit dans le format standard. La classe
+                        // dédiée bg-storageaccount-add-modal (voir CSS du template) pousse
+                        // le modal au-delà du gabarit "modal-xl" habituel de GLPI.
+                        'width'         => 1400,
+                        'height'        => 900,
+                        'dialog_class'  => 'modal-xl bg-storageaccount-add-modal',
+                    ]
                 );
                 $addAccountIcon .= "<span data-bs-toggle='tooltip'><i class='ti ti-plus'></i><span class='sr-only'>" . __s('Ajouter un compte', 'backupgestion') . "</span></span>";
                 $addAccountIcon .= '</div>';
@@ -143,14 +156,14 @@ class StorageAccounts extends CommonGLPI
         \Glpi\Application\View\TemplateRenderer::getInstance()->display(
             '@backupgestion/storagespace-accounts.html.twig',
             [
-                'item'               => $item,
-                'links'              => $links,
-                'availableAccounts'  => $availableAccounts,
-                'accountPicker'      => $accountPicker,
-                'accountInfoIcon'    => $accountInfoIcon,
-                'addAccountIcon'  => $addAccountIcon,
-                'webdir'          => Plugin::getWebDir('backupgestion'),
-                'canUpdate'       => StorageSpace::canUpdate(),
+                'item'                    => $item,
+                'links'                   => $links,
+                'availableAccountsCount'  => $availableAccountsCount,
+                'accountPicker'           => $accountPicker,
+                'accountInfoIcon'         => $accountInfoIcon,
+                'addAccountIcon'          => $addAccountIcon,
+                'webdir'                  => Plugin::getWebDir('backupgestion'),
+                'canUpdate'               => StorageSpace::canUpdate(),
             ]
         );
 

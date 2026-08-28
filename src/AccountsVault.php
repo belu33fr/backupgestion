@@ -447,7 +447,10 @@ class AccountsVault
      * Dropdown::show(..., ['entity' => $id, 'entity_sons' => true]) : entité + branche
      * descendante, filtrée par ce que la session en cours peut effectivement voir.
      *
-     * @return array<int, string> id => libellé, prêt pour Dropdown::showFromArray().
+     * Regroupée par entité (retour de Luc) — structure à deux niveaux compatible avec
+     * les optgroups de Dropdown::showFromArray() : "Nom d'entité" => [id => libellé].
+     *
+     * @return array<string, array<int, string>> nom d'entité => (id compte => libellé)
      */
     public static function listAccountsForDropdown(int $entities_id): array
     {
@@ -471,6 +474,7 @@ class AccountsVault
                 'glpi_plugin_accounts_accounts.id',
                 'glpi_plugin_accounts_accounts.name',
                 'glpi_plugin_accounts_accounts.login',
+                'glpi_plugin_accounts_accounts.entities_id',
                 'glpi_plugin_accounts_accounttypes.name AS type_name',
             ],
             'FROM'      => 'glpi_plugin_accounts_accounts',
@@ -486,9 +490,10 @@ class AccountsVault
             'ORDER' => 'glpi_plugin_accounts_accounts.name ASC',
         ]) as $row) {
             $accounts[(int)$row['id']] = [
-                'name'  => (string)($row['name'] ?? ''),
-                'type'  => (string)($row['type_name'] ?? ''),
-                'links' => [],
+                'name'        => (string)($row['name'] ?? ''),
+                'type'        => (string)($row['type_name'] ?? ''),
+                'entities_id' => (int)($row['entities_id'] ?? 0),
+                'links'       => [],
             ];
         }
 
@@ -518,11 +523,17 @@ class AccountsVault
             }
         }
 
-        $out = [];
+        $grouped = [];
         foreach ($accounts as $id => $account) {
-            $out[$id] = self::formatAccountDropdownLabel($account);
+            $entityLabel = \Dropdown::getDropdownName('glpi_entities', $account['entities_id']);
+            if ($entityLabel === '' || $entityLabel === '&nbsp;') {
+                $entityLabel = __('(entité inconnue)', 'backupgestion');
+            }
+            $grouped[$entityLabel][$id] = self::formatAccountDropdownLabel($account);
         }
-        return $out;
+        ksort($grouped, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return $grouped;
     }
 
     private static function formatAccountDropdownLabel(array $account): string
