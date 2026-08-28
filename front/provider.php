@@ -12,8 +12,7 @@ Html::header(
     Provider::getTypeName(2),
     $_SERVER['PHP_SELF'],
     'tools',
-    Provider::class,
-    'provider'
+    Provider::class
 );
 
 Search::show(Provider::class);

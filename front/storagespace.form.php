@@ -46,7 +46,7 @@ if (isset($_POST['add'])) {
         $_SERVER['PHP_SELF'],
         'tools',
         \GlpiPlugin\Backupgestion\Provider::class,
-        'storagespace'
+        StorageSpace::class
     );
 
     $storage->display([

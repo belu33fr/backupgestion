@@ -331,42 +331,49 @@ class Provider extends CommonDBTM
         return 'Sauvegardes';
     }
 
-    public static function getMenuContent(): array
+    /**
+     * Espaces de stockage (jalon 3, CDC 2.1) — accès depuis le menu "Sauvegardes", à côté
+     * du fournisseur de sauvegarde. Notre ancien `getMenuContent()` maison construisait
+     * une entrée `options['storagespace']` mais ça ne produisait aucun élément cliquable
+     * nulle part (ni menu déroulant, ni fil d'Ariane) — repéré par Luc en comparant avec
+     * le menu natif "Domaines", qui utilise en réalité ces deux hooks du CommonGLPI
+     * standard (Domain::getAdditionalMenuLinks()/getAdditionalMenuOptions(), jamais un
+     * getMenuContent() personnalisé) : getAdditionalMenuLinks() ajoute un vrai bouton
+     * sur la page de liste (à côté de "Ajouter"), getAdditionalMenuOptions() alimente en
+     * plus le fil d'Ariane. On laisse donc l'implémentation par défaut de
+     * CommonGLPI::getMenuContent() faire le travail (titre, page, icône, lien "Ajouter"),
+     * complétée uniquement par ces deux hooks — plus de getMenuContent() personnalisé ici.
+     */
+    public static function getAdditionalMenuLinks()
     {
-        $search = self::getSearchURL(false);
-        $form   = self::getFormURL(false);
+        if (!StorageSpace::canView()) {
+            return false;
+        }
 
-        $options = [
-            'provider' => [
-                'title' => self::getTypeName(2),
-                'page'  => $search,
-                'links' => [
-                    'search' => $search,
-                    'add'    => $form,
-                ],
-            ],
-        ];
+        $label = htmlescape(StorageSpace::getTypeName(Session::getPluralNumber()));
+        $icon  = StorageSpace::getIcon();
+        $link  = "<i class='$icon pointer' title=\"$label\"></i>
+            <span class='d-none d-xxl-block ps-1'>$label</span>";
 
-        // Espaces de stockage (jalon 3, CDC 2.1) — même menu "Sauvegardes", sous-entrée
-        // dédiée plutôt qu'un nouveau menu top-level.
-        if (StorageSpace::canView()) {
-            $storageSearch = StorageSpace::getSearchURL(false);
-            $storageForm   = StorageSpace::getFormURL(false);
-            $options['storagespace'] = [
-                'title' => StorageSpace::getTypeName(2),
-                'page'  => $storageSearch,
-                'links' => [
-                    'search' => $storageSearch,
-                    'add'    => $storageForm,
-                ],
-            ];
+        return [$link => StorageSpace::getSearchURL(false)];
+    }
+
+    public static function getAdditionalMenuOptions()
+    {
+        if (!StorageSpace::canView()) {
+            return false;
         }
 
         return [
-            'title'   => self::getMenuName(),
-            'page'    => $search,
-            'icon'    => self::getIcon(),
-            'options' => $options,
+            StorageSpace::class => [
+                'icon'  => StorageSpace::getIcon(),
+                'title' => StorageSpace::getTypeName(Session::getPluralNumber()),
+                'page'  => StorageSpace::getSearchURL(false),
+                'links' => [
+                    'add'    => StorageSpace::getFormURL(false),
+                    'search' => StorageSpace::getSearchURL(false),
+                ],
+            ],
         ];
     }
 

@@ -280,12 +280,14 @@ if (isset($_POST['quick_move_entity'])) {
 } else {
     $ID = (int)($_GET['id'] ?? 0);
 
+    // 5e paramètre ($option) laissé vide : Provider est désormais l'entrée "principale"
+    // du menu (via l'implémentation par défaut de CommonGLPI::getMenuContent()), plus
+    // une sous-entrée "options" qui n'existerait que pour un item annexe (StorageSpace).
     Html::header(
         Provider::getTypeName(1),
         $_SERVER['PHP_SELF'],
         'tools',
-        Provider::class,
-        'provider'
+        Provider::class
     );
 
     // GLPI 11 : display() gère création et édition
