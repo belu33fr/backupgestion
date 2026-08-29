@@ -271,10 +271,18 @@ class AcronisProvider implements ProviderInterface
 
     /**
      * Plans de sauvegarde (protection plans/policies) — Resource and Policy Management
-     * API (developer.acronis.com/doc/outbound/apis/api-library/resource-policy/policies/fetching-plans-policies.html) :
+     * API (developer.acronis.com/doc/resource-policy-management/v4/guide/plans-and-policies/fetching-plans-policies.html) :
      *   GET {datacenter_url}/api/policy_management/v4/policies
-     * La réponse imbrique les plans sous une clé `policy` (tableau) par élément —
-     * aplatie ici pour un usage direct côté affichage.
+     * La réponse imbrique un "plan de protection" composite (`policy.protection.total`)
+     * ET l'ensemble de ses composants sous une même clé `policy` (tableau) par élément —
+     * un plan combiné sauvegarde+antivirus+patch management renvoie donc, pêle-mêle,
+     * des entrées de type policy.backup.*, policy.security.patch_management,
+     * policy.security.gen_ai, policy.security.data_protection_map, etc. (confirmé via
+     * la documentation officielle, exemple de réponse "Fetching a list of policies").
+     * Seules les entrées réellement de sauvegarde (type préfixé "policy.backup.",
+     * cf. "Machine backup policy" = policy.backup.machine) sont conservées ici — retour
+     * de Luc : des policies de sécurité (patch management, protection IA générative…)
+     * apparaissaient à tort dans le tableau "Plans de sauvegarde".
      */
     public function listBackupPlans(): array
     {
@@ -284,10 +292,14 @@ class AcronisProvider implements ProviderInterface
         $plans = [];
         foreach ($raw as $entry) {
             foreach (($entry['policy'] ?? []) as $policy) {
+                $type = (string)($policy['type'] ?? '');
+                if (!str_starts_with($type, 'policy.backup.')) {
+                    continue;
+                }
                 $plans[] = [
                     'id'         => (string)($policy['id'] ?? ''),
                     'name'       => (string)($policy['name'] ?? ''),
-                    'type'       => (string)($policy['type'] ?? ''),
+                    'type'       => $type,
                     'enabled'    => !empty($policy['enabled']),
                     'tenant_id'  => (string)($policy['tenant_id'] ?? ''),
                     'updated_at' => (string)($policy['updated_at'] ?? ''),

@@ -26,12 +26,28 @@
             </div>
         </div>
 
-        {# Popup de création de compte volontairement plus large que le gabarit
-           "modal-xl" standard de GLPI (retour de Luc) — ciblée par sa classe dédiée
-           pour ne pas affecter les autres popups de l'application. #}
+        {# Popup de création de compte volontairement plus grande que le gabarit
+           "modal-xl" standard de GLPI (retour de Luc), ciblée par sa classe dédiée
+           pour ne pas affecter les autres popups de l'application. La largeur seule
+           ne suffisait pas (retour de Luc) : Ajax::createIframeModalWindow() calcule
+           la hauteur de l'iframe à partir du contenu chargé et l'applique en style
+           inline (Html::jsAjaxDropdown côté JS) — on la force donc explicitement en
+           `!important` pour prendre le dessus, plutôt que de dépendre de ce calcul. #}
         <style>
             .modal-dialog.bg-storageaccount-add-modal {
                 max-width: 95vw;
+            }
+            .bg-storageaccount-add-modal .modal-content {
+                height: 90vh;
+            }
+            .bg-storageaccount-add-modal .modal-body {
+                height: calc(100% - 3.5rem);
+                padding: 0;
+            }
+            .bg-storageaccount-add-modal .modal-body iframe {
+                height: 100% !important;
+                width: 100%;
+                border: 0;
             }
         </style>
         <div class="col-12 mb-3 d-flex gap-2 flex-wrap align-items-center">

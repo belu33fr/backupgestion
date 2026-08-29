@@ -4,7 +4,7 @@
  * BackupGestion - Plugin GLPI 11 de visualisation des sauvegardes multi-provider (Acronis en V1)
  */
 
-define('PLUGIN_BACKUPGESTION_VERSION', '0.12.4-dev');
+define('PLUGIN_BACKUPGESTION_VERSION', '0.12.5-dev');
 define('PLUGIN_BACKUPGESTION_MIN_GLPI', '11.0.0');
 define('PLUGIN_BACKUPGESTION_MAX_GLPI', '12.0.0');
 

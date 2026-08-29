@@ -36,7 +36,7 @@
                                 {% if device.online %}
                                     <span class="badge bg-success">{{ __('En ligne', 'backupgestion') }}</span>
                                 {% else %}
-                                    <span class="badge bg-secondary">{{ __('Hors ligne', 'backupgestion') }}</span>
+                                    <span class="badge bg-secondary-lt">{{ __('Hors ligne', 'backupgestion') }}</span>
                                 {% endif %}
                                 {% if not device.enabled %}
                                     <span class="badge bg-warning">{{ __('Désactivé', 'backupgestion') }}</span>
@@ -82,7 +82,7 @@
                                 {% if plan.enabled %}
                                     <span class="badge bg-success">{{ __('Actif') }}</span>
                                 {% else %}
-                                    <span class="badge bg-secondary">{{ __('Inactif') }}</span>
+                                    <span class="badge bg-secondary-lt">{{ __('Inactif') }}</span>
                                 {% endif %}
                             </td>
                             <td>{{ plan.updated_at }}</td>
