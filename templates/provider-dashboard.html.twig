@@ -110,14 +110,16 @@
                     <thead>
                         <tr>
                             <th>{{ __('Mesure', 'backupgestion') }}</th>
+                            <th>{{ __('Édition', 'backupgestion') }}</th>
                             <th>{{ __('Valeur', 'backupgestion') }}</th>
                             <th>{{ __('Unité', 'backupgestion') }}</th>
                         </tr>
                     </thead>
                     <tbody>
                     {% for stat in stats %}
-                        <tr>
+                        <tr class="{% if not stat.value %}text-secondary{% endif %}">
                             <td>{{ stat.name }}</td>
+                            <td>{% if stat.edition %}<span class="badge bg-blue-lt">{{ stat.edition }}</span>{% endif %}</td>
                             <td>{{ stat.value }}</td>
                             <td>{{ stat.unit }}</td>
                         </tr>

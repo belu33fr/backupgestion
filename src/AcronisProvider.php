@@ -313,6 +313,16 @@ class AcronisProvider implements ProviderInterface
      * Statistiques d'usage du tenant de ce provider (volume de stockage, etc.) —
      * Account Management API (developer.acronis.com/doc/account-management/v2/guide/usage-reporting/tenants-usage.html) :
      *   GET {datacenter_url}/api/2/tenants/usages?tenants={tenant_id}
+     *
+     * Un seul tenant est demandé (`tenants` = ce provider), mais la doc officielle
+     * (structure de "usage" + exemple) confirme qu'un MÊME tenant peut renvoyer
+     * plusieurs lignes portant le même `name`/`usage_name` (ex. "storage" en double) :
+     * chaque ligne correspond en réalité à une édition/offre différente (`edition`) et,
+     * pour les usages de type "infra", à un emplacement de stockage précis
+     * (`infra_id`) — ce n'est donc pas une pollution multi-tenant comme pour les plans,
+     * mais un manque de contexte dans l'affichage (retour de Luc : "à qui cela
+     * correspond"). L'édition est donc conservée ici pour être affichée à côté de
+     * chaque mesure et lever l'ambiguïté entre les lignes dupliquées.
      */
     public function listBackupStats(): array
     {
@@ -326,10 +336,11 @@ class AcronisProvider implements ProviderInterface
         foreach (($data['items'] ?? []) as $tenantUsages) {
             foreach (($tenantUsages['usages'] ?? []) as $usage) {
                 $stats[] = [
-                    'name'  => (string)($usage['usage_name'] ?? ($usage['name'] ?? '')),
-                    'value' => $usage['value'] ?? null,
-                    'unit'  => (string)($usage['measurement_unit'] ?? ''),
-                    'type'  => (string)($usage['type'] ?? ''),
+                    'name'    => (string)($usage['usage_name'] ?? ($usage['name'] ?? '')),
+                    'value'   => $usage['value'] ?? null,
+                    'unit'    => (string)($usage['measurement_unit'] ?? ''),
+                    'type'    => (string)($usage['type'] ?? ''),
+                    'edition' => (string)($usage['edition'] ?? ''),
                 ];
             }
         }
