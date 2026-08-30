@@ -331,6 +331,13 @@ class AcronisProvider implements ProviderInterface
      * pour les usages effectivement rattachés à un emplacement de stockage
      * (`infra_id`). Les autres usages (sièges, workloads protégés, etc.) sont écartés
      * ici ; à revoir plus tard si besoin.
+     *
+     * Chaque ligne de la réponse (`items`) porte son propre tenant (`tenant`, UUID) —
+     * résolu ici en nom lisible (`GET /tenants/{id}`) pour permettre d'identifier à
+     * quel client/tenant chaque volume est rattaché (retour de Luc : utile pour la
+     * facturation). Résolution mise en cache le temps de l'appel pour éviter une
+     * requête par ligne de statistique quand plusieurs lignes partagent le même
+     * tenant.
      */
     public function listBackupStats(): array
     {
@@ -340,21 +347,44 @@ class AcronisProvider implements ProviderInterface
         // apiGet() préfixe déjà '/api/2' — ne pas le répéter ici (piège rencontré en relecture).
         $data = $this->apiGet('/tenants/usages', $token['access_token'], ['tenants' => $tenantId]);
 
-        $stats = [];
+        $tenantNames = [];
+        $stats       = [];
         foreach (($data['items'] ?? []) as $tenantUsages) {
+            $usageTenantId = (string)($tenantUsages['tenant'] ?? '');
+            if ($usageTenantId !== '' && !isset($tenantNames[$usageTenantId])) {
+                $tenantNames[$usageTenantId] = $this->resolveTenantName($usageTenantId, $token['access_token']);
+            }
+
             foreach (($tenantUsages['usages'] ?? []) as $usage) {
                 if (($usage['type'] ?? '') !== 'infra') {
                     continue;
                 }
                 $stats[] = [
-                    'name'    => (string)($usage['usage_name'] ?? ($usage['name'] ?? '')),
-                    'value'   => $usage['value'] ?? null,
-                    'unit'    => (string)($usage['measurement_unit'] ?? ''),
-                    'type'    => (string)($usage['type'] ?? ''),
-                    'edition' => (string)($usage['edition'] ?? ''),
+                    'name'        => (string)($usage['usage_name'] ?? ($usage['name'] ?? '')),
+                    'value'       => $usage['value'] ?? null,
+                    'unit'        => (string)($usage['measurement_unit'] ?? ''),
+                    'type'        => (string)($usage['type'] ?? ''),
+                    'edition'     => (string)($usage['edition'] ?? ''),
+                    'tenant_id'   => $usageTenantId,
+                    'tenant_name' => $tenantNames[$usageTenantId] ?? '',
                 ];
             }
         }
         return $stats;
+    }
+
+    /**
+     * Résout le nom lisible d'un tenant à partir de son UUID (GET /tenants/{id}) —
+     * best-effort : retombe sur l'UUID brut si l'appel échoue, plutôt que de faire
+     * échouer tout l'affichage des statistiques pour un simple problème d'étiquette.
+     */
+    private function resolveTenantName(string $tenantId, string $accessToken): string
+    {
+        try {
+            $data = $this->apiGet('/tenants/' . rawurlencode($tenantId), $accessToken);
+            return (string)($data['name'] ?? $tenantId);
+        } catch (\Throwable $e) {
+            return $tenantId;
+        }
     }
 }

@@ -109,20 +109,23 @@
                 <table class="table table-sm">
                     <thead>
                         <tr>
+                            <th>{{ __('Tenant', 'backupgestion') }}</th>
                             <th>{{ __('Mesure', 'backupgestion') }}</th>
                             <th>{{ __('Édition', 'backupgestion') }}</th>
-                            <th>{{ __('Volume (Mo)', 'backupgestion') }}</th>
+                            <th>{{ __('Volume (Go)', 'backupgestion') }}</th>
                         </tr>
                     </thead>
                     <tbody>
                     {% for stat in stats %}
-                        {# Converti en Mo puis formaté avec le séparateur des milliers du compte
+                        {# Converti en Go puis formaté avec le séparateur des milliers du compte
                            utilisateur courant (Html::formatNumber lit $_SESSION['glpinumber_format'],
-                           réglable dans Préférences > Personnalisation) — retour de Luc. #}
+                           réglable dans Préférences > Personnalisation) — retour de Luc. Le tenant
+                           associé est affiché pour permettre l'identification (facturation…). #}
                         <tr class="{% if not stat.value %}text-secondary{% endif %}">
+                            <td>{{ stat.tenant_name ?: stat.tenant_id }}</td>
                             <td>{{ stat.name }}</td>
                             <td>{% if stat.edition %}<span class="badge bg-blue-lt">{{ stat.edition }}</span>{% endif %}</td>
-                            <td>{{ call('Html::formatNumber', [(stat.value ?: 0) / 1048576, false, 2]) }}</td>
+                            <td>{{ call('Html::formatNumber', [(stat.value ?: 0) / 1073741824, false, 2]) }}</td>
                         </tr>
                     {% endfor %}
                     </tbody>
