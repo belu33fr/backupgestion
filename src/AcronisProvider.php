@@ -353,10 +353,27 @@ class AcronisProvider implements ProviderInterface
         // Par lots (plutôt qu'une liste unique, potentiellement très longue en URL)
         // sur les gros arbres de tenants.
         foreach (array_chunk(array_keys($tenantTree), 50) as $tenantIdsChunk) {
-            // apiGet() préfixe déjà '/api/2' — ne pas le répéter ici (piège rencontré en relecture).
-            $data = $this->apiGet('/tenants/usages', $token['access_token'], ['tenants' => implode(',', $tenantIdsChunk)]);
+            try {
+                $items = $this->fetchTenantUsageItems($tenantIdsChunk, $token['access_token']);
+            } catch (\Throwable $e) {
+                // Un ID du lot fait échouer l'appel groupé en HTTP 400 (retour de Luc) —
+                // probablement un tenant d'un type non éligible à cet endpoint (ex.
+                // tenant "personnel", propre à un utilisateur — cf. doc officielle Account
+                // Management API) plutôt qu'une erreur de notre requête elle-même. Plutôt
+                // que deviner quel(s) type(s) exclure a priori, on isole en repliant sur un
+                // appel par tenant : celui qui échoue individuellement est ignoré, les
+                // autres restent affichés.
+                $items = [];
+                foreach ($tenantIdsChunk as $singleTenantId) {
+                    try {
+                        $items = array_merge($items, $this->fetchTenantUsageItems([$singleTenantId], $token['access_token']));
+                    } catch (\Throwable $e2) {
+                        continue;
+                    }
+                }
+            }
 
-            foreach (($data['items'] ?? []) as $tenantUsages) {
+            foreach ($items as $tenantUsages) {
                 $usageTenantId = (string)($tenantUsages['tenant'] ?? '');
                 $tenantName    = $tenantTree[$usageTenantId] ?? $usageTenantId;
 
@@ -377,6 +394,17 @@ class AcronisProvider implements ProviderInterface
             }
         }
         return $stats;
+    }
+
+    /**
+     * GET /tenants/usages pour un lot de tenants donné, renvoie directement le
+     * tableau `items` (chaque entrée = un tenant + ses usages).
+     */
+    private function fetchTenantUsageItems(array $tenantIds, string $accessToken): array
+    {
+        // apiGet() préfixe déjà '/api/2' — ne pas le répéter ici (piège rencontré en relecture).
+        $data = $this->apiGet('/tenants/usages', $accessToken, ['tenants' => implode(',', $tenantIds)]);
+        return $data['items'] ?? [];
     }
 
     /**
