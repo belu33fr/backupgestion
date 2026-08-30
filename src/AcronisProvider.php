@@ -332,42 +332,48 @@ class AcronisProvider implements ProviderInterface
      * (`infra_id`). Les autres usages (sièges, workloads protégés, etc.) sont écartés
      * ici ; à revoir plus tard si besoin.
      *
-     * Chaque ligne de la réponse (`items`) porte son propre tenant (`tenant`, UUID) —
-     * résolu ici en nom lisible (`GET /tenants/{id}`) pour permettre d'identifier à
-     * quel client/tenant chaque volume est rattaché (retour de Luc : utile pour la
-     * facturation). Résolution mise en cache le temps de l'appel pour éviter une
-     * requête par ligne de statistique quand plusieurs lignes partagent le même
-     * tenant.
+     * Ventilation par tenant réel (retour de Luc, confirmé sur son propre tenant
+     * BLCONSEILS, purement revendeur/sans usage propre) : interroger l'API avec un
+     * SEUL tenant (celui du provider) fait remonter le total AGRÉGÉ de toute sa
+     * descendance sous cette unique étiquette — pas une "pollution" comme pour les
+     * plans, mais un comportement d'agrégation documenté (facturation partenaire).
+     * Pour obtenir une ligne par tenant réel, on doit donc explicitement fournir la
+     * liste de tous les tenants de la descendance (`tenants` accepte une liste
+     * séparée par des virgules) : la hiérarchie est parcourue récursivement via
+     * listChildTenants() (collectTenantTree()), bornée en profondeur et en nombre
+     * total de tenants pour rester raisonnable sur un appel live sans cache.
      */
     public function listBackupStats(): array
     {
         $token    = $this->fetchAccessToken();
         $tenantId = $this->getOwnTenantId($token['access_token']);
+        $tenantTree = $this->collectTenantTree($tenantId, $token['access_token']);
 
-        // apiGet() préfixe déjà '/api/2' — ne pas le répéter ici (piège rencontré en relecture).
-        $data = $this->apiGet('/tenants/usages', $token['access_token'], ['tenants' => $tenantId]);
+        $stats = [];
+        // Par lots (plutôt qu'une liste unique, potentiellement très longue en URL)
+        // sur les gros arbres de tenants.
+        foreach (array_chunk(array_keys($tenantTree), 50) as $tenantIdsChunk) {
+            // apiGet() préfixe déjà '/api/2' — ne pas le répéter ici (piège rencontré en relecture).
+            $data = $this->apiGet('/tenants/usages', $token['access_token'], ['tenants' => implode(',', $tenantIdsChunk)]);
 
-        $tenantNames = [];
-        $stats       = [];
-        foreach (($data['items'] ?? []) as $tenantUsages) {
-            $usageTenantId = (string)($tenantUsages['tenant'] ?? '');
-            if ($usageTenantId !== '' && !isset($tenantNames[$usageTenantId])) {
-                $tenantNames[$usageTenantId] = $this->resolveTenantName($usageTenantId, $token['access_token']);
-            }
+            foreach (($data['items'] ?? []) as $tenantUsages) {
+                $usageTenantId = (string)($tenantUsages['tenant'] ?? '');
+                $tenantName    = $tenantTree[$usageTenantId] ?? $usageTenantId;
 
-            foreach (($tenantUsages['usages'] ?? []) as $usage) {
-                if (($usage['type'] ?? '') !== 'infra') {
-                    continue;
+                foreach (($tenantUsages['usages'] ?? []) as $usage) {
+                    if (($usage['type'] ?? '') !== 'infra') {
+                        continue;
+                    }
+                    $stats[] = [
+                        'name'        => (string)($usage['usage_name'] ?? ($usage['name'] ?? '')),
+                        'value'       => $usage['value'] ?? null,
+                        'unit'        => (string)($usage['measurement_unit'] ?? ''),
+                        'type'        => (string)($usage['type'] ?? ''),
+                        'edition'     => (string)($usage['edition'] ?? ''),
+                        'tenant_id'   => $usageTenantId,
+                        'tenant_name' => $tenantName,
+                    ];
                 }
-                $stats[] = [
-                    'name'        => (string)($usage['usage_name'] ?? ($usage['name'] ?? '')),
-                    'value'       => $usage['value'] ?? null,
-                    'unit'        => (string)($usage['measurement_unit'] ?? ''),
-                    'type'        => (string)($usage['type'] ?? ''),
-                    'edition'     => (string)($usage['edition'] ?? ''),
-                    'tenant_id'   => $usageTenantId,
-                    'tenant_name' => $tenantNames[$usageTenantId] ?? '',
-                ];
             }
         }
         return $stats;
@@ -386,5 +392,51 @@ class AcronisProvider implements ProviderInterface
         } catch (\Throwable $e) {
             return $tenantId;
         }
+    }
+
+    /**
+     * Parcourt récursivement la hiérarchie des tenants (le tenant donné + toute sa
+     * descendance), via listChildTenants() à chaque niveau — utilisé pour ventiler les
+     * statistiques d'usage par tenant réel (voir listBackupStats()). Bornée en
+     * profondeur et en nombre total de tenants collectés pour rester raisonnable sur
+     * un appel live sans cache (CDC 4.3 : "un cache technique très court pourra être
+     * ajouté si besoin" — pas encore fait).
+     *
+     * @return array<string, string> tenant_id => nom, le tenant racine inclus.
+     */
+    private function collectTenantTree(
+        string $tenantId,
+        string $accessToken,
+        int $depth = 0,
+        int $maxDepth = 6,
+        int $maxTotal = 200
+    ): array {
+        $tree = [$tenantId => $this->resolveTenantName($tenantId, $accessToken)];
+
+        if ($depth >= $maxDepth || count($tree) >= $maxTotal) {
+            return $tree;
+        }
+
+        foreach ($this->listChildTenants($tenantId, $accessToken) as $child) {
+            if (count($tree) >= $maxTotal) {
+                break;
+            }
+            $childId = (string)($child['id'] ?? '');
+            if ($childId === '' || isset($tree[$childId])) {
+                continue;
+            }
+            $tree[$childId] = (string)($child['name'] ?? $childId);
+
+            if (!empty($child['has_children']) && count($tree) < $maxTotal) {
+                foreach ($this->collectTenantTree($childId, $accessToken, $depth + 1, $maxDepth, $maxTotal) as $id => $name) {
+                    if (count($tree) >= $maxTotal) {
+                        break;
+                    }
+                    $tree[$id] = $name;
+                }
+            }
+        }
+
+        return $tree;
     }
 }
