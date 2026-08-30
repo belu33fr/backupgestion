@@ -323,6 +323,14 @@ class AcronisProvider implements ProviderInterface
      * mais un manque de contexte dans l'affichage (retour de Luc : "à qui cela
      * correspond"). L'édition est donc conservée ici pour être affichée à côté de
      * chaque mesure et lever l'ambiguïté entre les lignes dupliquées.
+     *
+     * Ne renvoie QUE les volumes de stockage (retour de Luc : "il n'y a pas que
+     * l'usage des espaces de stockage chez Acronis, il y a tout un tas de choses qui
+     * ne servent à rien... il ne faut afficher que les volumes de stockage dans un
+     * premier temps") — filtré sur `type === 'infra'`, le type documenté par Acronis
+     * pour les usages effectivement rattachés à un emplacement de stockage
+     * (`infra_id`). Les autres usages (sièges, workloads protégés, etc.) sont écartés
+     * ici ; à revoir plus tard si besoin.
      */
     public function listBackupStats(): array
     {
@@ -335,6 +343,9 @@ class AcronisProvider implements ProviderInterface
         $stats = [];
         foreach (($data['items'] ?? []) as $tenantUsages) {
             foreach (($tenantUsages['usages'] ?? []) as $usage) {
+                if (($usage['type'] ?? '') !== 'infra') {
+                    continue;
+                }
                 $stats[] = [
                     'name'    => (string)($usage['usage_name'] ?? ($usage['name'] ?? '')),
                     'value'   => $usage['value'] ?? null,
