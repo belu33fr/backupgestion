@@ -66,11 +66,11 @@
     {% if links|length %}
         <table class="table table-sm">
             <thead>
-                <tr>
-                    <th>{{ __('Compte', 'backupgestion') }}</th>
-                    <th>{{ __('Identifiant', 'backupgestion') }}</th>
-                    <th>{{ __('Type', 'backupgestion') }}</th>
-                    {% if canUpdate %}<th class="text-end">{{ __('Actions') }}</th>{% endif %}
+                <tr class="bg-blue">
+                    <th class="text-white fw-bold">{{ __('Compte', 'backupgestion') }}</th>
+                    <th class="text-white fw-bold">{{ __('Identifiant', 'backupgestion') }}</th>
+                    <th class="text-white fw-bold">{{ __('Type', 'backupgestion') }}</th>
+                    {% if canUpdate %}<th class="text-white fw-bold text-end">{{ __('Actions') }}</th>{% endif %}
                 </tr>
             </thead>
             <tbody>

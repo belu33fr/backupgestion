@@ -381,6 +381,16 @@ class AcronisProvider implements ProviderInterface
                     if (($usage['type'] ?? '') !== 'infra') {
                         continue;
                     }
+                    // Une même ligne "storage"/"archiving_storage"/etc. existe une fois
+                    // par édition/modèle de facturation possible (fss_per_gigabyte,
+                    // pck_per_workload, bundled…), la plupart à 0 quand ce modèle n'est
+                    // simplement pas celui utilisé par le tenant — retour de Luc : le
+                    // nombre de lignes ne correspondait pas à son nombre réel
+                    // d'emplacements de stockage (ex. 3 dans sa console Acronis contre
+                    // 30-40 lignes ici). Ne garder que les lignes avec un usage réel.
+                    if (($usage['value'] ?? 0) <= 0) {
+                        continue;
+                    }
                     $stats[] = [
                         'name'        => (string)($usage['usage_name'] ?? ($usage['name'] ?? '')),
                         'value'       => $usage['value'] ?? null,

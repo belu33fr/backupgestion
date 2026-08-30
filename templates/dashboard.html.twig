@@ -69,13 +69,13 @@
             {% if recentLogs|length %}
                 <table class="table table-sm mb-0">
                     <thead>
-                        <tr>
-                            <th>{{ __('Date') }}</th>
-                            <th>{{ __('Statut', 'backupgestion') }}</th>
-                            <th>{{ __('Trouvé(s)', 'backupgestion') }}</th>
-                            <th>{{ __('Rattaché(s)', 'backupgestion') }}</th>
-                            <th>{{ __('En attente', 'backupgestion') }}</th>
-                            <th>{{ __('Erreur', 'backupgestion') }}</th>
+                        <tr class="bg-blue">
+                            <th class="text-white fw-bold">{{ __('Date') }}</th>
+                            <th class="text-white fw-bold">{{ __('Statut', 'backupgestion') }}</th>
+                            <th class="text-white fw-bold">{{ __('Trouvé(s)', 'backupgestion') }}</th>
+                            <th class="text-white fw-bold">{{ __('Rattaché(s)', 'backupgestion') }}</th>
+                            <th class="text-white fw-bold">{{ __('En attente', 'backupgestion') }}</th>
+                            <th class="text-white fw-bold">{{ __('Erreur', 'backupgestion') }}</th>
                         </tr>
                     </thead>
                     <tbody>

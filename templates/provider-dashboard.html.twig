@@ -21,11 +21,11 @@
             {% if devices|length %}
                 <table class="table table-sm">
                     <thead>
-                        <tr>
-                            <th>{{ __('Nom') }}</th>
-                            <th>{{ __('Statut', 'backupgestion') }}</th>
-                            <th>{{ __('Plateforme', 'backupgestion') }}</th>
-                            <th>{{ __('Tenant', 'backupgestion') }}</th>
+                        <tr class="bg-blue">
+                            <th class="text-white fw-bold">{{ __('Nom') }}</th>
+                            <th class="text-white fw-bold">{{ __('Statut', 'backupgestion') }}</th>
+                            <th class="text-white fw-bold">{{ __('Plateforme', 'backupgestion') }}</th>
+                            <th class="text-white fw-bold">{{ __('Tenant', 'backupgestion') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -66,11 +66,11 @@
             {% if plans|length %}
                 <table class="table table-sm">
                     <thead>
-                        <tr>
-                            <th>{{ __('Nom') }}</th>
-                            <th>{{ __('Type', 'backupgestion') }}</th>
-                            <th>{{ __('Statut', 'backupgestion') }}</th>
-                            <th>{{ __('Dernière modification', 'backupgestion') }}</th>
+                        <tr class="bg-blue">
+                            <th class="text-white fw-bold">{{ __('Nom') }}</th>
+                            <th class="text-white fw-bold">{{ __('Type', 'backupgestion') }}</th>
+                            <th class="text-white fw-bold">{{ __('Statut', 'backupgestion') }}</th>
+                            <th class="text-white fw-bold">{{ __('Dernière modification', 'backupgestion') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -108,11 +108,11 @@
             {% if stats|length %}
                 <table class="table table-sm">
                     <thead>
-                        <tr>
-                            <th>{{ __('Tenant', 'backupgestion') }}</th>
-                            <th>{{ __('Mesure', 'backupgestion') }}</th>
-                            <th>{{ __('Édition', 'backupgestion') }}</th>
-                            <th>{{ __('Volume (Go)', 'backupgestion') }}</th>
+                        <tr class="bg-blue">
+                            <th class="text-white fw-bold">{{ __('Tenant', 'backupgestion') }}</th>
+                            <th class="text-white fw-bold">{{ __('Mesure', 'backupgestion') }}</th>
+                            <th class="text-white fw-bold">{{ __('Édition', 'backupgestion') }}</th>
+                            <th class="text-white fw-bold">{{ __('Volume (Go)', 'backupgestion') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -120,8 +120,9 @@
                         {# Converti en Go puis formaté avec le séparateur des milliers du compte
                            utilisateur courant (Html::formatNumber lit $_SESSION['glpinumber_format'],
                            réglable dans Préférences > Personnalisation) — retour de Luc. Le tenant
-                           associé est affiché pour permettre l'identification (facturation…). #}
-                        <tr class="{% if not stat.value %}text-secondary{% endif %}">
+                           associé est affiché pour permettre l'identification (facturation…). Seules
+                           les lignes à usage réel (valeur > 0) sont remontées par listBackupStats(). #}
+                        <tr>
                             <td>{{ stat.tenant_name ?: stat.tenant_id }}</td>
                             <td>{{ stat.name }}</td>
                             <td>{% if stat.edition %}<span class="badge bg-blue-lt">{{ stat.edition }}</span>{% endif %}</td>
